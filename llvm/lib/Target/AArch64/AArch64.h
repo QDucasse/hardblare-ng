@@ -72,6 +72,8 @@ FunctionPass *createAArch64PostLegalizerLowering();
 FunctionPass *createAArch64PostSelectOptimize();
 FunctionPass *createAArch64StackTaggingPass(bool IsOptNone);
 FunctionPass *createAArch64StackTaggingPreRAPass();
+// HBNG: Register annotation pass
+FunctionPass *createAArch64HBNGAnnotatePass();
 ModulePass *createAArch64Arm64ECCallLoweringPass();
 
 void initializeAArch64A53Fix835769Pass(PassRegistry&);
@@ -112,6 +114,8 @@ void initializeSMEABIPass(PassRegistry &);
 void initializeSMEPeepholeOptPass(PassRegistry &);
 void initializeSVEIntrinsicOptsPass(PassRegistry &);
 void initializeAArch64Arm64ECCallLoweringPass(PassRegistry &);
+// HBNG: Initialize annotation pass
+void initializeAArch64HBNGAnnotatePass(PassRegistry &);
 } // end namespace llvm
 
 #endif

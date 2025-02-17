@@ -268,6 +268,8 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAArch64Target() {
   initializeAArch64StackTaggingPreRAPass(*PR);
   initializeAArch64LowerHomogeneousPrologEpilogPass(*PR);
   initializeAArch64DAGToDAGISelLegacyPass(*PR);
+  // HBNG: Initialize annotation pass
+  initializeAArch64HBNGAnnotatePass(*PR);
 }
 
 void AArch64TargetMachine::reset() { SubtargetMap.clear(); }
@@ -875,6 +877,10 @@ void AArch64PassConfig::addPreEmitPass() {
   if (TM->getOptLevel() != CodeGenOptLevel::None && EnableCollectLOH &&
       TM->getTargetTriple().isOSBinFormatMachO())
     addPass(createAArch64CollectLOHPass());
+
+
+  // HBNG: Add the pass at the end of the emission, after all optimizations
+  addPass(createAArch64HBNGAnnotatePass());
 }
 
 void AArch64PassConfig::addPostBBSections() {

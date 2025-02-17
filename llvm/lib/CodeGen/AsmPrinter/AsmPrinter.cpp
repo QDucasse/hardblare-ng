@@ -2685,6 +2685,22 @@ bool AsmPrinter::doFinalization(Module &M) {
     }
   }
 
+
+    // HBNG: Switch to the .hbngannot section
+    // TODO: Move into its own file
+    OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGAnnotationSection());
+    NamedMDNode *NMD = M.getNamedMetadata("hbng_annotation_info");
+    if (NMD) {
+      for (const auto *Tuple : NMD->operands()) {
+        const auto *FunctionName = dyn_cast<MDString>(Tuple->getOperand(0));
+        const auto *Mnemonic = dyn_cast<MDString>(Tuple->getOperand(1));
+        if (FunctionName && Mnemonic) {
+          std::string pair = FunctionName->getString().str() + "," + Mnemonic->getString().str() + "\n";
+          OutStreamer->emitBytes(pair);
+        }
+      }
+    }
+
   // Allow the target to emit any magic that it wants at the end of the file,
   // after everything else has gone out.
   emitEndOfAsmFile(M);

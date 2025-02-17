@@ -90,6 +90,8 @@ add_llvm_target(AArch64CodeGen
   SVEIntrinsicOpts.cpp
   AArch64SIMDInstrOpt.cpp
 
+  AArch64HBNGAnnotate.cpp
+
   DEPENDS
   intrinsics_gen
 
