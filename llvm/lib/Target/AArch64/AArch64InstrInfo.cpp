@@ -2163,6 +2163,11 @@ bool AArch64InstrInfo::isGPRZero(const MachineInstr &MI) {
     return MI.getOperand(1).getReg() == AArch64::WZR;
   case AArch64::ANDXri:
     return MI.getOperand(1).getReg() == AArch64::XZR;
+  // HBNG: Added this case as it is found in practice
+  case AArch64::ORRWrs: // orr Rd, Rzr, Rzr
+    return MI.getOperand(1).getReg() == AArch64::WZR && MI.getOperand(2).getReg() == AArch64::WZR;
+  case AArch64::ORRXrs: // orr Rd, Rzr, Rzr
+    return MI.getOperand(1).getReg() == AArch64::XZR && MI.getOperand(2).getReg() == AArch64::XZR;
   case TargetOpcode::COPY:
     return MI.getOperand(1).getReg() == AArch64::WZR;
   }

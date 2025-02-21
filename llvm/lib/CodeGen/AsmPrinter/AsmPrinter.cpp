@@ -2692,11 +2692,9 @@ bool AsmPrinter::doFinalization(Module &M) {
     NamedMDNode *NMD = M.getNamedMetadata("hbng_annotation_info");
     if (NMD) {
       for (const auto *Tuple : NMD->operands()) {
-        const auto *FunctionName = dyn_cast<MDString>(Tuple->getOperand(0));
-        const auto *Mnemonic = dyn_cast<MDString>(Tuple->getOperand(1));
-        if (FunctionName && Mnemonic) {
-          std::string pair = FunctionName->getString().str() + "," + Mnemonic->getString().str() + "\n";
-          OutStreamer->emitBytes(pair);
+        const auto *Annotation = dyn_cast<MDString>(Tuple->getOperand(0));
+        if (Annotation) {
+          OutStreamer->emitBytes(Annotation->getString().str() + "\n");
         }
       }
     }
