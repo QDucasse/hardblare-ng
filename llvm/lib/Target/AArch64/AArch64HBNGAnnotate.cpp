@@ -65,7 +65,7 @@ private:
     void genRdTwoOperandsAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Carry, bool Flags);
     void genRdImmAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Sticky);
     void genRdPCAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Page);
-    void genPCImmCondAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Cond, bool Link);
+    void genPCOffsetCondAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Cond, bool Link);
     void genRtAddr(
       MachineInstr &MI, LLVMContext &Ctx, StringRef Op, AccessSize Size,
       bool isScaled, bool isStore, bool isPair, bool isIndexed
@@ -227,16 +227,27 @@ void AArch64HBNGAnnotate::genRdPCAnnotation(MachineInstr &MI, LLVMContext &Ctx, 
   storeAnnotation(Result, Ctx);
 }
 
-void AArch64HBNGAnnotate::genPCImmCondAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Cond, bool Link) {
+void AArch64HBNGAnnotate::genPCOffsetCondAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Cond, bool Link) {
+
+  int OffsetIndex = Cond ? 1 : 0;
+
+  if (Link) {
+    std::string FormatStringLR;
+    raw_string_ostream OSLR(FormatStringLR);
+    OSLR << "LR <- PC " << Op << " LR " << Op << " ";
+    printStrOperand(MI.getOperand(OffsetIndex), OSLR);
+    StringRef Result(FormatStringLR);
+    LLVM_DEBUG(dbgs() << Result << "\n");
+    storeAnnotation(Result, Ctx);
+  }
+
   // Use a raw_string_ostream to format the string.
   std::string FormatString;
   raw_string_ostream OSPC(FormatString);
 
-  int ImmIndex = Cond ? 1 : 0;
-
   // PC<- imm + PC + [<PC> + imm]
   OSPC << "PC <- PC " << Op << " ";
-  printStrOperand(MI.getOperand(ImmIndex), OSPC);
+  printStrOperand(MI.getOperand(OffsetIndex), OSPC);
   if (Cond) {
     AArch64CC::CondCode CC = static_cast<AArch64CC::CondCode>(MI.getOperand(0).getImm());
     printCondition(CC, Op, OSPC);
@@ -254,17 +265,6 @@ void AArch64HBNGAnnotate::genPCImmCondAnnotation(MachineInstr &MI, LLVMContext &
   StringRef Result(FormatString);
   LLVM_DEBUG(dbgs() << Result << "\n");
   storeAnnotation(Result, Ctx);
-
-
-  if (Link) {
-    std::string FormatStringLR;
-    raw_string_ostream OSLR(FormatStringLR);
-    OSLR << "LR <- PC " << Op << " LR " << Op << " ";
-    printStrOperand(MI.getOperand(ImmIndex), OSLR);
-    StringRef Result(FormatStringLR);
-    LLVM_DEBUG(dbgs() << Result << "\n");
-    storeAnnotation(Result, Ctx);
-  }
 }
 
 void AArch64HBNGAnnotate::genRtAddr(
@@ -453,14 +453,23 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
     //=== BITMANIP ===//
     //=== BRANCH ===//
     case AArch64::B:
-      genPCImmCondAnnotation(MI, Ctx, "bra", /*Cond=*/false, /*Link=*/false);
+      genPCOffsetCondAnnotation(MI, Ctx, "bra", /*Cond=*/false, /*Link=*/false);
+      break;
+    case AArch64::BR:
+      genPCOffsetCondAnnotation(MI, Ctx, "bra", /*Cond=*/false, /*Link=*/false);
       break;
     case AArch64::Bcc:
-      genPCImmCondAnnotation(MI, Ctx, "bra", /*Cond=*/true, /*Link=*/false);
+      genPCOffsetCondAnnotation(MI, Ctx, "bra", /*Cond=*/true, /*Link=*/false);
       break;
     //=== BRANCH&LINK ===//
     case AArch64::BL:
-      genPCImmCondAnnotation(MI, Ctx, "lin", /*Cond=*/false, /*Link=*/true);
+      genPCOffsetCondAnnotation(MI, Ctx, "lin", /*Cond=*/false, /*Link=*/true);
+      break;
+    case AArch64::BLR:
+      genPCOffsetCondAnnotation(MI, Ctx, "lin", /*Cond=*/false, /*Link=*/true);
+      break;
+    case AArch64::RET:
+      genPCOffsetCondAnnotation(MI, Ctx, "ret", /*Cond=*/false, /*Link=*/false);
       break;
     //=== LOAD ===//
     // TODO: Other addressing modes
