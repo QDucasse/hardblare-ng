@@ -64,8 +64,12 @@ private:
     void printCondition(AArch64CC::CondCode CC, StringRef Op, raw_string_ostream &OS);
     void genRdTwoOperandsAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Carry, bool Flags);
     void genRdImmAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Sticky);
-    void genPCImmCondAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Cond);
-    void genRtAddr(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, AccessSize Size, bool Scaled, bool Store);
+    void genRdPCAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Page);
+    void genPCImmCondAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Cond, bool Link);
+    void genRtAddr(
+      MachineInstr &MI, LLVMContext &Ctx, StringRef Op, AccessSize Size,
+      bool isScaled, bool isStore, bool isPair, bool isIndexed
+    );
     void genZero(MachineInstr &MI, LLVMContext &Ctx);
 };
 
@@ -200,42 +204,73 @@ void AArch64HBNGAnnotate::genRdImmAnnotation(MachineInstr &MI, LLVMContext &Ctx,
   storeAnnotation(Result, Ctx);
 }
 
-void AArch64HBNGAnnotate::genPCImmCondAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Cond) {
+void AArch64HBNGAnnotate::genRdPCAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Page) {
   // Use a raw_string_ostream to format the string.
   std::string FormatString;
   raw_string_ostream OS(FormatString);
 
-  int ImmIndex = Cond ? 1 : 0;
+  printStrOperand(MI.getOperand(0), OS);
+  OS << " <- PC";
 
-  // TODO: Note that the ImmIndex now is not defined yet and refers to another basic block
-  // While it might not be needed (tagging code memory is useful for self-modifying code)
-  // it should be happening after the branch resolution (in the MCInst layer) if needed
-  OS << "PC <- [<PC> + ";
-  printStrOperand(MI.getOperand(ImmIndex), OS);
-  OS << "] " << Op << " ";
-  printStrOperand(MI.getOperand(ImmIndex), OS);
-  if (Cond) {
-    AArch64CC::CondCode CC = static_cast<AArch64CC::CondCode>(MI.getOperand(0).getImm());
-    printCondition(CC, Op, OS);
+  // Propagating the code memory tag
+#ifdef false
+  OS << " " << "[<PC> + ";
+  printStrOperand(MI.getOperand(1), OS)
+  if (Page) {
+    OS << " << 12"
   }
-  OS << " " << Op << " PC";
+  OS << "]"
+#endif
 
   StringRef Result(FormatString);
   LLVM_DEBUG(dbgs() << Result << "\n");
   storeAnnotation(Result, Ctx);
 }
 
-void AArch64HBNGAnnotate::genRtAddr(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, AccessSize Size, bool Scaled, bool Store) {
+void AArch64HBNGAnnotate::genPCImmCondAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Cond, bool Link) {
   // Use a raw_string_ostream to format the string.
-  std::string FormatStringAddress;
-  raw_string_ostream OSaddr(FormatStringAddress);
-
-
   std::string FormatString;
-  raw_string_ostream OS(FormatString);
+  raw_string_ostream OSPC(FormatString);
 
-  uint64_t TSFlags = MI.getDesc().TSFlags;
+  int ImmIndex = Cond ? 1 : 0;
 
+  // PC<- imm + PC + [<PC> + imm]
+  OSPC << "PC <- PC " << Op << " ";
+  printStrOperand(MI.getOperand(ImmIndex), OSPC);
+  if (Cond) {
+    AArch64CC::CondCode CC = static_cast<AArch64CC::CondCode>(MI.getOperand(0).getImm());
+    printCondition(CC, Op, OSPC);
+  }
+
+#ifdef false
+  // TODO: Note that the ImmIndex now is not defined yet and refers to another basic block
+  // While it might not be needed (tagging code memory is useful for self-modifying code)
+  // it should be happening after the branch resolution (in the MCInst layer) if needed
+  OSPC << "[<PC> + ";
+  printStrOperand(MI.getOperand(ImmIndex), OSPC);
+  OSPC << "] " << Op << " ";
+#endif
+
+  StringRef Result(FormatString);
+  LLVM_DEBUG(dbgs() << Result << "\n");
+  storeAnnotation(Result, Ctx);
+
+
+  if (Link) {
+    std::string FormatStringLR;
+    raw_string_ostream OSLR(FormatStringLR);
+    OSLR << "LR <- PC " << Op << " LR " << Op << " ";
+    printStrOperand(MI.getOperand(ImmIndex), OSLR);
+    StringRef Result(FormatStringLR);
+    LLVM_DEBUG(dbgs() << Result << "\n");
+    storeAnnotation(Result, Ctx);
+  }
+}
+
+void AArch64HBNGAnnotate::genRtAddr(
+  MachineInstr &MI, LLVMContext &Ctx, StringRef Op, AccessSize Size,
+  bool isScaled, bool isStore, bool isPair, bool isIndexed
+) {
 
   // TODO: This does not output the correct extension operator for an unknown reason.
   // From AArch64SchedPredicates.td:
@@ -253,49 +288,82 @@ void AArch64HBNGAnnotate::genRtAddr(MachineInstr &MI, LLVMContext &Ctx, StringRe
   //
   // Note that the CheckImmOperandSimple looks at field 4, same for CheckImmOperand_s looking at field 3.
   //
+  // To explore:
+#ifdef false
+  uint64_t TSFlags = MI.getDesc().TSFlags;
+#endif
+
+  int OffsetIndex = isPair ? 3 : 2;
+  if (isIndexed) {
+    OffsetIndex++;
+  }
+
+  // Use a raw_string_ostream to format the string.
+  std::string FormatStringAddress;
+  raw_string_ostream OSaddr(FormatStringAddress);
 
   OSaddr << "[<";
-  printStrOperand(MI.getOperand(1), OSaddr);
+  printStrOperand(MI.getOperand(OffsetIndex - 1), OSaddr);
   OSaddr << "> + ";
-  // TODO: Scale factor is not always 4
-  if (Scaled) {
-    OSaddr << " 4*";
+  // TODO: Scale factor is not always 4: https://devblogs.microsoft.com/oldnewthing/20220728-00/?p=106912
+  if (isScaled) {
+    OSaddr << Size/8 << "*";
   }
-  if (MI.getOperand(2).isReg()) {
+  if (MI.getOperand(OffsetIndex).isReg()) {
     OSaddr << "<";
-    printStrOperand(MI.getOperand(2), OSaddr);
-
+    printStrOperand(MI.getOperand(OffsetIndex), OSaddr);
+    OSaddr << "> ";
     AArch64_AM::ShiftExtendType SET = AArch64_AM::getMemExtendType(MI.getOperand(3).getImm());
     bool DoShift = AArch64_AM::getMemDoShift(MI.getOperand(4).getImm());
-    OSaddr << "> " << AArch64_AM::getShiftExtendName(SET)<< " ";;
+    OSaddr << AArch64_AM::getShiftExtendName(SET)<< " ";;
     if (DoShift) {
-      OSaddr << "2";
+      OSaddr << (Size >> 4);
     } else {
       OSaddr << "0";
     }
   } else {
-    printStrOperand(MI.getOperand(2), OSaddr);
+    printStrOperand(MI.getOperand(OffsetIndex), OSaddr);
   }
-  OSaddr << "]_" << Size;
+  // Does not close the address ] so that in case of a pair the offset is kept
 
   // Output the annotation in the form:
   // Rt <- [<Rn> + 4*(<Rm> extend amount)] Op Rn Op Rm
+  for (int i = isPair ? 1 : 0; i < OffsetIndex - 1; i ++) {
 
-  if (Store) {
-    OS << FormatStringAddress << " <- ";
-    printStrOperand(MI.getOperand(0), OS);
-  } else {
-    printStrOperand(MI.getOperand(0), OS);
-    OS << " <- " << FormatStringAddress;
+    std::string FormatString;
+    raw_string_ostream OS(FormatString);
+    if (isStore) {
+      OS << FormatStringAddress << "]_" << Size << " <- ";
+      printStrOperand(MI.getOperand(i), OS);
+    } else {
+      printStrOperand(MI.getOperand(i), OS);
+      OS << " <- " << FormatStringAddress << "]_" << Size;
+    }
+    OS << " " << Op << " ";
+    printStrOperand(MI.getOperand(OffsetIndex - 1), OS);
+    OS << " " << Op << " ";
+    printStrOperand(MI.getOperand(OffsetIndex), OS);
+
+    StringRef Result(FormatString);
+    LLVM_DEBUG(dbgs() << Result << "\n");
+    storeAnnotation(Result, Ctx);
+
+    // Mitigate size for a pair if needed
+    OSaddr << " + " << Size;
   }
-  OS << " " << Op << " ";
-  printStrOperand(MI.getOperand(1), OS);
-  OS << " " << Op << " ";
-  printStrOperand(MI.getOperand(2), OS);
 
-  StringRef Result(FormatString);
-  LLVM_DEBUG(dbgs() << Result << "\n");
-  storeAnnotation(Result, Ctx);
+  if (isIndexed) {
+    std::string FormatString;
+    raw_string_ostream OSIdx(FormatString);
+    printStrOperand(MI.getOperand(OffsetIndex - 1), OSIdx);
+    OSIdx << " <- ";
+    printStrOperand(MI.getOperand(OffsetIndex - 1), OSIdx);
+    OSIdx << " " << Op << " ";
+    printStrOperand(MI.getOperand(OffsetIndex), OSIdx);
+    StringRef Result(FormatString);
+    LLVM_DEBUG(dbgs() << Result << "\n");
+    storeAnnotation(Result, Ctx);
+  }
 }
 
 //===----------------------------------------------------------------------===//
@@ -315,6 +383,7 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
   switch (MI.getOpcode()) {
     default:
         storeAnnotation(unsup, Ctx);
+        LLVM_DEBUG(dbgs() << Unsupported << "\n");
         break;
     //=== ARITHMETIC ===//
     // Two registers
@@ -351,25 +420,23 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
     // TODO: Missing 3 register instructions
 
     //=== ADDR COMPUTATION ===//
+    case AArch64::ADR:
+      genRdPCAnnotation(MI, Ctx, "adr", /*Page=*/false);
+      break;
+    case AArch64::ADRP:
+      genRdPCAnnotation(MI, Ctx, "adr", /*Page=*/true);
+      break;
     //=== LOGICAL ===//
-    case AArch64::ANDXrr: case AArch64::ANDXrs:
-    case AArch64::ANDWrr: case AArch64::ANDWrs:
-    case AArch64::BICXrr: case AArch64::BICXrs:
-    case AArch64::BICWrr: case AArch64::BICWrs:
-    case AArch64::EORXrr: case AArch64::EORXrs:
-    case AArch64::EORWrr: case AArch64::EORWrs:
-    case AArch64::EONXrr: case AArch64::EONXrs:
-    case AArch64::EONWrr: case AArch64::EONWrs:
-    case AArch64::ORNXrr: case AArch64::ORNXrs:
-    case AArch64::ORNWrr: case AArch64::ORNWrs:
-    case AArch64::ORRXrr: case AArch64::ORRXrs:
-    case AArch64::ORRWrr: case AArch64::ORRWrs:
+    case AArch64::ANDXrr: case AArch64::ANDXrs: case AArch64::ANDWrr: case AArch64::ANDWrs:
+    case AArch64::BICXrr: case AArch64::BICXrs: case AArch64::BICWrr: case AArch64::BICWrs:
+    case AArch64::EORXrr: case AArch64::EORXrs: case AArch64::EORWrr: case AArch64::EORWrs:
+    case AArch64::EONXrr: case AArch64::EONXrs: case AArch64::EONWrr: case AArch64::EONWrs:
+    case AArch64::ORNXrr: case AArch64::ORNXrs: case AArch64::ORNWrr: case AArch64::ORNWrs:
+    case AArch64::ORRXrr: case AArch64::ORRXrs: case AArch64::ORRWrr: case AArch64::ORRWrs:
       genRdTwoOperandsAnnotation(MI, Ctx, "log", /*Carry=*/false, /*Flags=*/false);
       break;
-    case AArch64::ANDSXrr: case AArch64::ANDSXrs:
-    case AArch64::ANDSWrr: case AArch64::ANDSWrs:
-    case AArch64::BICSXrr: case AArch64::BICSXrs:
-    case AArch64::BICSWrr: case AArch64::BICSWrs:
+    case AArch64::ANDSXrr: case AArch64::ANDSXrs: case AArch64::ANDSWrr: case AArch64::ANDSWrs:
+    case AArch64::BICSXrr: case AArch64::BICSXrs: case AArch64::BICSWrr: case AArch64::BICSWrs:
       genRdTwoOperandsAnnotation(MI, Ctx, "log", /*Carry=*/false, /*Flags=*/true);
       break;
     //=== SHIFTS ===//
@@ -386,45 +453,65 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
     //=== BITMANIP ===//
     //=== BRANCH ===//
     case AArch64::B:
-      genPCImmCondAnnotation(MI, Ctx, "bra", /*Cond=*/false);
+      genPCImmCondAnnotation(MI, Ctx, "bra", /*Cond=*/false, /*Link=*/false);
       break;
     case AArch64::Bcc:
-      genPCImmCondAnnotation(MI, Ctx, "bra", /*Cond=*/true);
+      genPCImmCondAnnotation(MI, Ctx, "bra", /*Cond=*/true, /*Link=*/false);
       break;
     //=== BRANCH&LINK ===//
+    case AArch64::BL:
+      genPCImmCondAnnotation(MI, Ctx, "lin", /*Cond=*/false, /*Link=*/true);
+      break;
     //=== LOAD ===//
     // TODO: Other addressing modes
     case AArch64::LDRWroW:  case AArch64::LDRSWroW:
     case AArch64::LDRWroX: case AArch64::LDRSWroX:
-      genRtAddr(MI, Ctx, "loa", WORD, /*Scaled=*/true, false);
+      genRtAddr(MI, Ctx, "loa", WORD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRWui: case AArch64::LDRSWui:
-      genRtAddr(MI, Ctx, "loa", WORD, /*Scaled=*/true, false);
+      genRtAddr(MI, Ctx, "loa", WORD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::LDRXui:
+      genRtAddr(MI, Ctx, "loa", DOUB, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRQui:
-      genRtAddr(MI, Ctx, "loa", QUAD, /*Scaled=*/true, false);
+      genRtAddr(MI, Ctx, "loa", QUAD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDURWi: case AArch64::LDURSWi:
-      genRtAddr(MI, Ctx, "loa", WORD, /*Scaled=*/false, false);
+      genRtAddr(MI, Ctx, "loa", WORD, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::LDRWpost: case AArch64::LDRSWpost:
-    case AArch64::LDRWpre: case AArch64::LDRSWpre:
+    case AArch64::LDURXi:
+      genRtAddr(MI, Ctx, "loa", DOUB, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::LDPXi:
+      genRtAddr(MI, Ctx, "loa", DOUB, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/true, /*isIndexed*/false);
       break;
     //=== STORE ===//
     // TODO: Other addressing modes
     case AArch64::STRWroW: case AArch64::STRWroX:
-      genRtAddr(MI, Ctx, "sto", WORD, /*Scaled=*/true, /*Store=*/true);
+      genRtAddr(MI, Ctx, "sto", WORD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRWui: case AArch64::STRSui:
-      genRtAddr(MI, Ctx, "sto", WORD, /*Scaled=*/true, /*Store=*/true);
+      genRtAddr(MI, Ctx, "sto", WORD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::STRXui:
+      genRtAddr(MI, Ctx, "sto", DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRQui:
-      genRtAddr(MI, Ctx, "sto", QUAD, /*Scaled=*/true, /*Store=*/true);
+      genRtAddr(MI, Ctx, "sto", QUAD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STURWi:
-      genRtAddr(MI, Ctx, "sto", WORD, /*Scaled=*/false, /*Store=*/true);
+      genRtAddr(MI, Ctx, "sto", WORD, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
-
+    case AArch64::STPXi:
+      genRtAddr(MI, Ctx, "sto", DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/true, /*isIndexed*/false);
+      break;
+    case AArch64::STPXpre: case AArch64::STPXpost:
+      genRtAddr(MI, Ctx, "sto", DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/true, /*isIndexed*/true);
+      break;
+    // UNSUPPORTED
+    case AArch64::CFI_INSTRUCTION:
+      break;
   }
 }
 
@@ -433,7 +520,7 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
 
 bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
     LLVM_DEBUG(dbgs() << "***** HBNG Annotations *****\n");
-    // Initialize subtarget information
+    // Initialize subtarget information as attributes
     auto &STI = MF.getSubtarget<AArch64Subtarget>();
     TII = STI.getInstrInfo();
     TRI = MF.getSubtarget().getRegisterInfo();
