@@ -2687,14 +2687,40 @@ bool AsmPrinter::doFinalization(Module &M) {
 
 
     // HBNG: Switch to the .hbngannot section
-    // TODO: Move into its own file
     OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGAnnotationSection());
-    NamedMDNode *NMD = M.getNamedMetadata("hbng_annotation_info");
-    if (NMD) {
-      for (const auto *Tuple : NMD->operands()) {
+    NamedMDNode *AnnotMD = M.getNamedMetadata("hbng_annotation_info");
+    if (AnnotMD) {
+      for (const auto *Tuple : AnnotMD->operands()) {
         const auto *Annotation = dyn_cast<MDString>(Tuple->getOperand(0));
+
         if (Annotation) {
           OutStreamer->emitBytes(Annotation->getString().str() + "\n");
+        }
+      }
+    }
+    // HBNG: Switch to the .hbngbbt section
+    OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGBasicBlockTableSection());
+    NamedMDNode *BBTMD = M.getNamedMetadata("hbng_basic_block_table");
+    if (BBTMD) {
+      for (const auto *Tuple : BBTMD->operands()) {
+        // Extract the MDString (basic block symbol) and the ConstantInt (annotation offset)
+        const auto *MetadataTuple = dyn_cast<MDTuple>(Tuple);
+        if (MetadataTuple && MetadataTuple->getNumOperands() == 2) {
+          const auto *BBSymbol = dyn_cast<MDString>(MetadataTuple->getOperand(0));  // Basic block symbol (MDString)
+          const auto *AnnotationOffset = dyn_cast<ConstantAsMetadata>(MetadataTuple->getOperand(1));  // Annotation offset (ConstantAsMetadata)
+
+          if (BBSymbol && AnnotationOffset) {
+            // Emit the basic block symbol (string) to the section
+            OutStreamer->emitBytes(BBSymbol->getString().str());
+
+            // Extract the annotation offset and emit it (as a 64-bit integer)
+            const auto *ConstInt = dyn_cast<ConstantInt>(AnnotationOffset->getValue());
+            if (ConstInt) {
+              // You can directly use `ConstInt->getValue()` to get the APInt and then emit it
+              uint64_t Offset = ConstInt->getValue().getZExtValue();
+              OutStreamer->emitInt64(Offset); // Emit the 64-bit annotation offset
+            }
+          }
         }
       }
     }

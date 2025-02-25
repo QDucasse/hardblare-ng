@@ -66,6 +66,8 @@ protected:
 
   /// HBNG annotation section initialization
   MCSection *HBNGAnnotationSection = nullptr;
+  /// HBNG basic block table section initialization
+  MCSection *HBNGBasicBlockTableSection = nullptr;
 
   /// If exception handling is supported by the target, this is the section the
   /// Language Specific Data Area information is emitted to.
@@ -277,6 +279,8 @@ public:
   MCSection *getReadOnlySection() const { return ReadOnlySection; }
   // HBNG: annotation section
   MCSection *getHBNGAnnotationSection() const { return HBNGAnnotationSection; }
+  // HBNG basic block table section
+  MCSection *getHBNGBasicBlockTableSection() const { return HBNGBasicBlockTableSection; }
   MCSection *getLSDASection() const { return LSDASection; }
   MCSection *getImportCallSection() const { return ImportCallSection; }
   MCSection *getCompactUnwindSection() const { return CompactUnwindSection; }

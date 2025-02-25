@@ -42,6 +42,8 @@ class AArch64HBNGAnnotate : public MachineFunctionPass {
     const TargetRegisterInfo *TRI;
     const MachineRegisterInfo *MRI;
     std::vector<MDNode *> Annotations;
+    uint64_t CurrentAnnotationOffset;
+    std::vector<std::pair<MCSymbol *, uint64_t>> BasicBlockTable;
 
 public:
     static char ID;
@@ -163,9 +165,12 @@ void AArch64HBNGAnnotate::printStrOperand(MachineOperand &MO, raw_string_ostream
   }
 }
 
+// FIXME: Should probably simply push back and perform this step once at the end of the pass
 void AArch64HBNGAnnotate::storeAnnotation(StringRef &annotation, LLVMContext &Ctx) {
   Metadata *OpData[] = { MDString::get(Ctx, annotation) };
   Annotations.push_back(MDTuple::get(Ctx, OpData)); // Store metadata in vector
+  uint64_t annotationSize = annotation.size();
+  CurrentAnnotationOffset += annotationSize;
 }
 
 //===----------------------------------------------------------------------===//
@@ -584,27 +589,49 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
     Module *M = MF.getFunction().getParent();
     LLVMContext &Ctx = MF.getFunction().getContext();
 
+    // Set up for the basic block table
+    CurrentAnnotationOffset = 0;
+
     // Attach collected data as module metadata, avoids polluting global symbols
-    // and will be extracted at the emission stage and added to the binary.
-    NamedMDNode *NMD = M->getOrInsertNamedMetadata("hbng_annotation_info");
+    // and will be extracted at the emission stage and added to the binary. We create
+    // Two dedicated structures, one for the annotations, the other for the BBT.
+    NamedMDNode *AnnotMD = M->getOrInsertNamedMetadata("hbng_annotation_info");
+    NamedMDNode *BBTMD = M->getOrInsertNamedMetadata("hbng_basic_block_table");
 
     LLVM_DEBUG(dbgs() << "func: " << MF.getName() << "\n");
     for (auto &MBB : MF) {
       LLVM_DEBUG(dbgs() << "bblock: " << MBB.getName() << "\n");
+      // Basic block symbol
+      MCSymbol *BBSymbol = MBB.getSymbol();
       for (auto &MI : MBB) {
         unsigned int opcode = MI.getOpcode();
         StringRef mnemonic = TII->getName(opcode);
         LLVM_DEBUG(dbgs() << "instr: " << mnemonic << "\n");
+        // Main generation function, creates AND STORES the annotation
         generateAnnotation(MI, Ctx);
       }
       // Adding an end instruction in the annotations
       std::string endAnnotation = "END";
       StringRef endRef(endAnnotation);
       storeAnnotation(endRef, Ctx);
+
+      // Adds the basic block symbol and offsetinn the table
+      BasicBlockTable.push_back({BBSymbol, CurrentAnnotationOffset});
     }
 
+    //
     for (auto &Annotation : Annotations) {
-      NMD->addOperand(Annotation);
+      AnnotMD->addOperand(Annotation);
+    }
+
+    for (const auto &Entry : BasicBlockTable) {
+        // Create a tuple with the basic block symbol and the corresponding annotation offset
+        std::vector<Metadata *> MetadataList;
+        MetadataList.push_back(MDString::get(Ctx, Entry.first->getName())); // Basic block symbol (converted to string)
+        MetadataList.push_back(ConstantAsMetadata::get(ConstantInt::get(Ctx, APInt(64, Entry.second)))); // Annotation offset (64-bit integer)
+
+        // Add the tuple to the BBT metadata
+        BBTMD->addOperand(MDTuple::get(Ctx, MetadataList));
     }
 
     // Notify if the content has changed

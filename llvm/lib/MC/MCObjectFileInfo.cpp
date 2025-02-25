@@ -402,6 +402,9 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   // HBNG annotation section
   HBNGAnnotationSection =
       Ctx->getELFSection(".hbngannot", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+  // HBNG basic block table section
+  HBNGBasicBlockTableSection =
+      Ctx->getELFSection(".hbngbbt", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
 
   TLSDataSection =
       Ctx->getELFSection(".tdata", ELF::SHT_PROGBITS,
