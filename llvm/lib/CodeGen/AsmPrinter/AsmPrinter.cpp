@@ -2698,32 +2698,35 @@ bool AsmPrinter::doFinalization(Module &M) {
         }
       }
     }
-    // HBNG: Switch to the .hbngbbt section
-    OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGBasicBlockTableSection());
-    NamedMDNode *BBTMD = M.getNamedMetadata("hbng_basic_block_table");
-    if (BBTMD) {
-      for (const auto *Tuple : BBTMD->operands()) {
-        // Extract the MDString (basic block symbol) and the ConstantInt (annotation offset)
-        const auto *MetadataTuple = dyn_cast<MDTuple>(Tuple);
-        if (MetadataTuple && MetadataTuple->getNumOperands() == 2) {
-          const auto *BBSymbol = dyn_cast<MDString>(MetadataTuple->getOperand(0));  // Basic block symbol (MDString)
-          const auto *AnnotationOffset = dyn_cast<ConstantAsMetadata>(MetadataTuple->getOperand(1));  // Annotation offset (ConstantAsMetadata)
 
-          if (BBSymbol && AnnotationOffset) {
-            // Emit the basic block symbol (string) to the section
-            OutStreamer->emitBytes(BBSymbol->getString().str());
 
-            // Extract the annotation offset and emit it (as a 64-bit integer)
-            const auto *ConstInt = dyn_cast<ConstantInt>(AnnotationOffset->getValue());
-            if (ConstInt) {
-              // You can directly use `ConstInt->getValue()` to get the APInt and then emit it
-              uint64_t Offset = ConstInt->getValue().getZExtValue();
-              OutStreamer->emitInt64(Offset); // Emit the 64-bit annotation offset
-            }
+  // // HBNG: Switch to the .hbngbbt section
+  OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGBasicBlockTableSection());
+  NamedMDNode *BBTMD = M.getNamedMetadata("hbng_basic_block_table");
+  if (BBTMD) {
+    for (const auto *Tuple : BBTMD->operands()) {
+      const auto *MetadataTuple = dyn_cast<MDTuple>(Tuple);
+      // Extract the MDString (basic block symbol) and the ConstantInt (annotation offset)
+      if (MetadataTuple && MetadataTuple->getNumOperands() == 2) {
+        const auto *BBSymbolMD = dyn_cast<MDString>(MetadataTuple->getOperand(0));
+        const auto *AnnotationOffset = dyn_cast<ConstantAsMetadata>(MetadataTuple->getOperand(1));
+
+        if (BBSymbolMD && AnnotationOffset) {
+          // Get the MCSymbol for this basic block
+          MCSymbol *BBSymbol = OutContext.getOrCreateSymbol(BBSymbolMD->getString());
+          // Emit an 8-byte (64-bit) address reference to the symbol
+          OutStreamer->emitSymbolValue(BBSymbol, 8);
+          LLVM_DEBUG(dbgs() << "Emitting basic block address for: " << BBSymbol->getName() << "\n");
+          // Extract the annotation offset and emit it (as a 64-bit integer)
+          const auto *ConstInt = dyn_cast<ConstantInt>(AnnotationOffset->getValue());
+          if (ConstInt) {
+            uint64_t Offset = ConstInt->getValue().getZExtValue();
+            OutStreamer->emitInt64(Offset); // Emit the 64-bit annotation offset
           }
         }
       }
     }
+  }
 
   // Allow the target to emit any magic that it wants at the end of the file,
   // after everything else has gone out.

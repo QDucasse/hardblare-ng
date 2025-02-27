@@ -11,6 +11,7 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "MCTargetDesc/AArch64AddressingModes.h"
@@ -43,7 +44,7 @@ class AArch64HBNGAnnotate : public MachineFunctionPass {
     const MachineRegisterInfo *MRI;
     std::vector<MDNode *> Annotations;
     uint64_t CurrentAnnotationOffset;
-    std::vector<std::pair<MCSymbol *, uint64_t>> BasicBlockTable;
+    std::vector<std::pair<std::string, uint64_t>> BasicBlockTable;
 
 public:
     static char ID;
@@ -602,7 +603,18 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
     for (auto &MBB : MF) {
       LLVM_DEBUG(dbgs() << "bblock: " << MBB.getName() << "\n");
       // Basic block symbol
-      MCSymbol *BBSymbol = MBB.getSymbol();
+      // TODO: I am here reverse-engineering the temporary label used in the final binary,
+      //       This might not be the best option but since the basic block label itself
+      //       is not generated yet (MBB.getSymbol() gets an empty string for now).
+      std::string BBSymbolName;
+      if (MBB.isEntryBlock()) {
+        BBSymbolName = MF.getName();
+      } else {
+        // TODO: why is the -1 needed..... a basic block might be removed later on?
+        BBSymbolName = ".LBB" + std::to_string(MF.getFunctionNumber()) + "_" + std::to_string(MBB.getNumber() - 1);
+      }
+      // Force basic block labels to be emitted
+      MBB.setLabelMustBeEmitted();
       for (auto &MI : MBB) {
         unsigned int opcode = MI.getOpcode();
         StringRef mnemonic = TII->getName(opcode);
@@ -616,7 +628,7 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
       storeAnnotation(endRef, Ctx);
 
       // Adds the basic block symbol and offsetinn the table
-      BasicBlockTable.push_back({BBSymbol, CurrentAnnotationOffset});
+      BasicBlockTable.push_back({BBSymbolName, CurrentAnnotationOffset});
     }
 
     //
@@ -627,7 +639,7 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
     for (const auto &Entry : BasicBlockTable) {
         // Create a tuple with the basic block symbol and the corresponding annotation offset
         std::vector<Metadata *> MetadataList;
-        MetadataList.push_back(MDString::get(Ctx, Entry.first->getName())); // Basic block symbol (converted to string)
+        MetadataList.push_back(MDString::get(Ctx, Entry.first)); // Basic block symbol (converted to string)
         MetadataList.push_back(ConstantAsMetadata::get(ConstantInt::get(Ctx, APInt(64, Entry.second)))); // Annotation offset (64-bit integer)
 
         // Add the tuple to the BBT metadata
