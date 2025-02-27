@@ -606,6 +606,10 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
       // TODO: I am here reverse-engineering the temporary label used in the final binary,
       //       This might not be the best option but since the basic block label itself
       //       is not generated yet (MBB.getSymbol() gets an empty string for now).
+      //       Note that if the basic block is the first one in the function, its label
+      //       will not be generated, even with setLabelMustBeEmitted, (see
+      //       shouldEmitLabelForBasicBlock in AsmPrinter.cpp) as it can fall back to the
+      //       function name label directly.
       std::string BBSymbolName;
       if (MBB.isEntryBlock()) {
         BBSymbolName = MF.getName();
@@ -615,6 +619,10 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
       }
       // Force basic block labels to be emitted
       MBB.setLabelMustBeEmitted();
+
+      // Adds the basic block symbol and start offset of the annotations in the table
+      BasicBlockTable.push_back({BBSymbolName, CurrentAnnotationOffset});
+
       for (auto &MI : MBB) {
         unsigned int opcode = MI.getOpcode();
         StringRef mnemonic = TII->getName(opcode);
@@ -626,9 +634,6 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
       std::string endAnnotation = "END";
       StringRef endRef(endAnnotation);
       storeAnnotation(endRef, Ctx);
-
-      // Adds the basic block symbol and offsetinn the table
-      BasicBlockTable.push_back({BBSymbolName, CurrentAnnotationOffset});
     }
 
     //
