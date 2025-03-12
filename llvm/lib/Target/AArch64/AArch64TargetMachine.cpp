@@ -878,9 +878,6 @@ void AArch64PassConfig::addPreEmitPass() {
       TM->getTargetTriple().isOSBinFormatMachO())
     addPass(createAArch64CollectLOHPass());
 
-
-  // HBNG: Add the pass at the end of the emission, after all optimizations
-  addPass(createAArch64HBNGAnnotatePass());
 }
 
 void AArch64PassConfig::addPostBBSections() {
@@ -901,6 +898,8 @@ void AArch64PassConfig::addPreEmitPass2() {
   // SVE bundles move prefixes with destructive operations. BLR_RVMARKER pseudo
   // instructions are lowered to bundles as well.
   addPass(createUnpackMachineBundles(nullptr));
+  // HBNG: Add the pass at the end of the emission, after all optimizations
+  addPass(createAArch64HBNGAnnotatePass());
 }
 
 bool AArch64PassConfig::addRegAssignAndRewriteOptimized() {

@@ -483,6 +483,8 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
     case AArch64::ORRXrr: case AArch64::ORRXrs: case AArch64::ORRWrr: case AArch64::ORRWrs:
       genRdTwoOperandsAnnotation(MI, Ctx, "log", /*Carry=*/false, /*Flags=*/false);
       break;
+    // TODO: Shited instructions
+    // case AArch64::ORRXri:
     case AArch64::ANDSXrr: case AArch64::ANDSXrs: case AArch64::ANDSWrr: case AArch64::ANDSWrs:
     case AArch64::BICSXrr: case AArch64::BICSXrs: case AArch64::BICSWrr: case AArch64::BICSWrs:
       genRdTwoOperandsAnnotation(MI, Ctx, "log", /*Carry=*/false, /*Flags=*/true);
@@ -565,6 +567,9 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
     case AArch64::STURWi:
       genRtAddr(MI, Ctx, "sto", WORD, UNUSED, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
+    case AArch64::STURXi:
+      genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      break;
     case AArch64::STPXi:
       genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/true, /*isIndexed*/false);
       break;
@@ -617,7 +622,7 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
         BBSymbolName = MF.getName();
       } else {
         // TODO: why is the -1 needed..... a basic block might be removed later on?
-        BBSymbolName = ".LBB" + std::to_string(MF.getFunctionNumber()) + "_" + std::to_string(MBB.getNumber() - 1);
+        BBSymbolName = ".LBB" + std::to_string(MF.getFunctionNumber()) + "_" + std::to_string(MBB.getNumber());
       }
       // Force basic block labels to be emitted
       MBB.setLabelMustBeEmitted();
