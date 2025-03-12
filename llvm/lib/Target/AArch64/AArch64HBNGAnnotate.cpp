@@ -50,6 +50,7 @@ public:
     static char ID;
     AArch64HBNGAnnotate() : MachineFunctionPass(ID) {
       initializeAArch64HBNGAnnotatePass(*PassRegistry::getPassRegistry());
+      CurrentAnnotationOffset = 0;
     }
 
     // Generate annotations for all instructions in a given machine function
@@ -590,8 +591,9 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
     Module *M = MF.getFunction().getParent();
     LLVMContext &Ctx = MF.getFunction().getContext();
 
-    // Set up for the basic block table
-    CurrentAnnotationOffset = 0;
+    // Reset the basic block table and annotations for the current machine function
+    BasicBlockTable = {};
+    Annotations = {};
 
     // Attach collected data as module metadata, avoids polluting global symbols
     // and will be extracted at the emission stage and added to the binary. We create
