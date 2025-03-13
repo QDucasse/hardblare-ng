@@ -15,6 +15,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "MCTargetDesc/AArch64AddressingModes.h"
+#include "MCTargetDesc/AArch64MCTargetDesc.h"
 
 using namespace llvm;
 
@@ -64,7 +65,7 @@ public:
     }
 
 private:
-    void storeAnnotation(StringRef &annotation, LLVMContext &Ctx);
+    void storeAnnotation(StringRef &Annotation, LLVMContext &Ctx);
     void printStrOperand(MachineOperand &MO, raw_string_ostream &OS);
     void printCondition(AArch64CC::CondCode CC, StringRef Op, raw_string_ostream &OS);
     void genRdTwoOperandsAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Carry, bool Flags);
@@ -73,7 +74,7 @@ private:
     void genPCOffsetCondAnnotation(MachineInstr &MI, LLVMContext &Ctx, StringRef Op, bool Cond, bool Link);
     void genRtAddr(
       MachineInstr &MI, LLVMContext &Ctx, StringRef Op, Size ASize, Size OSize,
-      bool isScaled, bool isStore, bool isPair, bool isIndexed
+      bool IsScaled, bool IsStore, bool IsPair, bool IsIndexed
     );
     void genZero(MachineInstr &MI, LLVMContext &Ctx);
 };
@@ -96,7 +97,7 @@ enum NZCVFlags {
   V = 1 << 0   // Overflow
 };
 
-unsigned getNZCVFlagsUsed(AArch64CC::CondCode CC) {
+static unsigned getNZCVFlagsUsed(AArch64CC::CondCode CC) {
   switch (CC) {
       case AArch64CC::EQ: return Z;                     // Zero
       case AArch64CC::NE: return Z;                     // Zero
@@ -117,7 +118,7 @@ unsigned getNZCVFlagsUsed(AArch64CC::CondCode CC) {
   }
 }
 
-void getMemExtendOperator(MachineInstr &MI, Size OSize, AArch64_AM::ShiftExtendType& SET) {
+static void getMemExtendOperator(MachineInstr &MI, Size OSize, AArch64_AM::ShiftExtendType& SET) {
   switch (MI.getOperand(3).getImm()) {
     case 0:
       switch (OSize) {
@@ -168,11 +169,11 @@ void AArch64HBNGAnnotate::printStrOperand(MachineOperand &MO, raw_string_ostream
 }
 
 // FIXME: Should probably simply push back and perform this step once at the end of the pass
-void AArch64HBNGAnnotate::storeAnnotation(StringRef &annotation, LLVMContext &Ctx) {
-  Metadata *OpData[] = { MDString::get(Ctx, annotation) };
+void AArch64HBNGAnnotate::storeAnnotation(StringRef &Annotation, LLVMContext &Ctx) {
+  Metadata *OpData[] = { MDString::get(Ctx, Annotation) };
   Annotations.push_back(MDTuple::get(Ctx, OpData)); // Store metadata in vector
-  uint64_t annotationSize = annotation.size();
-  CurrentAnnotationOffset += annotationSize;
+  uint64_t AnnotationSize = Annotation.size();
+  CurrentAnnotationOffset += AnnotationSize;
 }
 
 //===----------------------------------------------------------------------===//
@@ -308,7 +309,7 @@ void AArch64HBNGAnnotate::genPCOffsetCondAnnotation(MachineInstr &MI, LLVMContex
 
 void AArch64HBNGAnnotate::genRtAddr(
   MachineInstr &MI, LLVMContext &Ctx, StringRef Op, Size ASize, Size OSize,
-  bool isScaled, bool isStore, bool isPair, bool isIndexed
+  bool IsScaled, bool IsStore, bool IsPair, bool IsIndexed
 ) {
 
   // TODO: This does not output the correct extension operator for an unknown reason.
@@ -336,8 +337,8 @@ void AArch64HBNGAnnotate::genRtAddr(
   // I guess the extension is either signed (1) or unsigned (0) and its size corresponds to the size of the offset register
 
 
-  int OffsetIndex = isPair ? 3 : 2;
-  if (isIndexed) {
+  int OffsetIndex = IsPair ? 3 : 2;
+  if (IsIndexed) {
     OffsetIndex++;
   }
 
@@ -348,8 +349,8 @@ void AArch64HBNGAnnotate::genRtAddr(
   OSaddr << "[<";
   printStrOperand(MI.getOperand(OffsetIndex - 1), OSaddr);
   OSaddr << "> + ";
-  // TODO: Scale factor is not always 4: https://devblogs.microsoft.com/oldnewthing/20220728-00/?p=106912
-  if (isScaled) {
+  // Scale factor depends on the instruction access size: https://devblogs.microsoft.com/oldnewthing/20220728-00/?p=106912
+  if (IsScaled) {
     OSaddr << ASize/8 << "*";
   }
   if (MI.getOperand(OffsetIndex).isReg()) {
@@ -364,7 +365,6 @@ void AArch64HBNGAnnotate::genRtAddr(
     bool DoShift = AArch64_AM::getMemDoShift(MI.getOperand(4).getImm());
     OSaddr << AArch64_AM::getShiftExtendName(SET)<< " ";;
     if (DoShift) {
-      // TODO: Is it really ASize? or OSize?
       OSaddr << (ASize >> 4);
     } else {
       OSaddr << "0";
@@ -376,11 +376,11 @@ void AArch64HBNGAnnotate::genRtAddr(
 
   // Output the annotation in the form:
   // Rt <- [<Rn> + 4*(<Rm> extend amount)] Op Rn Op Rm
-  for (int i = isPair ? 1 : 0; i < OffsetIndex - 1; i ++) {
+  for (int i = IsPair ? 1 : 0; i < OffsetIndex - 1; i ++) {
 
     std::string FormatString;
     raw_string_ostream OS(FormatString);
-    if (isStore) {
+    if (IsStore) {
       OS << FormatStringAddress << "]_" << ASize << " <- ";
       printStrOperand(MI.getOperand(i), OS);
     } else {
@@ -400,7 +400,7 @@ void AArch64HBNGAnnotate::genRtAddr(
     OSaddr << " + " << ASize;
   }
 
-  if (isIndexed) {
+  if (IsIndexed) {
     std::string FormatString;
     raw_string_ostream OSIdx(FormatString);
     printStrOperand(MI.getOperand(OffsetIndex - 1), OSIdx);
@@ -421,7 +421,7 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
   std::string Unsupported;
   raw_string_ostream OS(Unsupported);
   OS << "Unsupported: " << TII->getName(MI.getOpcode());
-  StringRef unsup(Unsupported);
+  StringRef Unsup(Unsupported);
 
   if (TII->isGPRZero(MI)) {
     genZero(MI, Ctx);
@@ -430,7 +430,7 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
 
   switch (MI.getOpcode()) {
     default:
-        storeAnnotation(unsup, Ctx);
+        storeAnnotation(Unsup, Ctx);
         LLVM_DEBUG(dbgs() << Unsupported << "\n");
         break;
     //=== ARITHMETIC ===//
@@ -481,15 +481,20 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
     case AArch64::EONXrr: case AArch64::EONXrs: case AArch64::EONWrr: case AArch64::EONWrs:
     case AArch64::ORNXrr: case AArch64::ORNXrs: case AArch64::ORNWrr: case AArch64::ORNWrs:
     case AArch64::ORRXrr: case AArch64::ORRXrs: case AArch64::ORRWrr: case AArch64::ORRWrs:
+    // imm
+    case AArch64::ORRXri: case AArch64::ORRWri: case AArch64::ANDXri: case AArch64::ANDWri:
       genRdTwoOperandsAnnotation(MI, Ctx, "log", /*Carry=*/false, /*Flags=*/false);
       break;
-    // TODO: Shited instructions
-    // case AArch64::ORRXri:
     case AArch64::ANDSXrr: case AArch64::ANDSXrs: case AArch64::ANDSWrr: case AArch64::ANDSWrs:
     case AArch64::BICSXrr: case AArch64::BICSXrs: case AArch64::BICSWrr: case AArch64::BICSWrs:
+    case AArch64::ANDSXri: case AArch64::ANDSWri:
       genRdTwoOperandsAnnotation(MI, Ctx, "log", /*Carry=*/false, /*Flags=*/true);
       break;
     //=== SHIFTS ===//
+    case AArch64::ASRVWr: case AArch64::ASRVXr:
+    case AArch64::LSRVWr: case AArch64::LSRVXr:
+      genRdTwoOperandsAnnotation(MI, Ctx, "shi", /*Carry=*/false, /*Flags=*/true);
+      break;
     //=== MOVES ===//
     // Partial move
     case AArch64::MOVKWi: case AArch64::MOVKXi:
@@ -523,42 +528,114 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
       break;
     //=== LOAD ===//
     // TODO: Other addressing modes
-    case AArch64::LDRWroW:  case AArch64::LDRSWroW:
+    // Register offsets
+    case AArch64::LDRBBroW: case AArch64::LDRBroW:
+      genRtAddr(MI, Ctx, "loa", BYTE, WORD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::LDRBBroX: case AArch64::LDRBroX:
+      genRtAddr(MI, Ctx, "loa", BYTE, DOUB, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::LDRHHroW: case AArch64::LDRHroW:
+      genRtAddr(MI, Ctx, "loa", HALF, WORD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
+      case AArch64::LDRHHroX: case AArch64::LDRHroX:
+      genRtAddr(MI, Ctx, "loa", HALF, DOUB, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::LDRWroW:  case AArch64::LDRSWroW: case AArch64::LDRSroW:
       genRtAddr(MI, Ctx, "loa", WORD, WORD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::LDRWroX: case AArch64::LDRSWroX:
+    case AArch64::LDRWroX: case AArch64::LDRSWroX: case AArch64::LDRSroX:
       genRtAddr(MI, Ctx, "loa", WORD, DOUB, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::LDRWui: case AArch64::LDRSWui:
+    case AArch64::LDRXroW: case AArch64::LDRDroW:
+      genRtAddr(MI, Ctx, "sto", DOUB, WORD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::LDRXroX: case AArch64::LDRDroX:
+      genRtAddr(MI, Ctx, "loa", DOUB, DOUB, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    // Immediate offsets
+    case AArch64::LDRBBui: case AArch64::LDRBui:
+      genRtAddr(MI, Ctx, "loa", BYTE, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::LDRHHui: case AArch64::LDRHui:
+      genRtAddr(MI, Ctx, "loa", HALF, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::LDRWui: case AArch64::LDRSWui: case AArch64::LDRSui:
       genRtAddr(MI, Ctx, "loa", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::LDRXui:
+    case AArch64::LDRXui: case AArch64::LDRDui:
       genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRQui:
       genRtAddr(MI, Ctx, "loa", QUAD, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::LDURWi: case AArch64::LDURSWi:
+    // TODO: Difference between ldurswi and ldursi?
+    case AArch64::LDURWi: case AArch64::LDURSWi: case AArch64::LDURSi:
       genRtAddr(MI, Ctx, "loa", WORD, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::LDURXi:
+    case AArch64::LDURXi: case AArch64::LDURDi:
       genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::LDPXi:
+    case AArch64::LDRBBpre: case AArch64::LDRBBpost: case AArch64::LDRBpre: case AArch64::LDRBpost:
+      genRtAddr(MI, Ctx, "loa", BYTE, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      break;
+    case AArch64::LDRHHpre: case AArch64::LDRHHpost: case AArch64::LDRHpre: case AArch64::LDRHpost:
+      genRtAddr(MI, Ctx, "loa", HALF, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      break;
+    case AArch64::LDRWpre: case AArch64::LDRWpost: case AArch64::LDRSpre: case AArch64::LDRSpost:
+      genRtAddr(MI, Ctx, "loa", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      break;
+    case AArch64::LDRXpre: case AArch64::LDRXpost: case AArch64::LDRDpre: case AArch64::LDRDpost:
+      genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      break;
+    // Pairs
+    case AArch64::LDPWi: case AArch64::LDPSWi: case AArch64::LDPSi:
+      genRtAddr(MI, Ctx, "loa", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/true, /*isIndexed*/false);
+      break;
+    case AArch64::LDPXi: case AArch64::LDPDi:
       genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/true, /*isIndexed*/false);
+      break;
+    case AArch64::LDPQi:
+      genRtAddr(MI, Ctx, "loa", QUAD, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/true, /*isIndexed*/false);
+      break;
+    case AArch64::LDPWpre: case AArch64::LDPWpost: case AArch64::LDPDpost:
+      genRtAddr(MI, Ctx, "loa", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/true, /*isIndexed*/true);
+      break;
+    case AArch64::LDPXpre: case AArch64::LDPXpost:
+      genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/true, /*isIndexed*/true);
       break;
     //=== STORE ===//
     // TODO: Other addressing modes
-    case AArch64::STRWroW:
+    // Register offsets
+    case AArch64::STRBBroW: case AArch64::STRBroW:
+      genRtAddr(MI, Ctx, "sto", BYTE, WORD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::STRBBroX: case AArch64::STRBroX:
+      genRtAddr(MI, Ctx, "sto", BYTE, DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::STRHHroW: case AArch64::STRHroW:
+      genRtAddr(MI, Ctx, "sto", HALF, WORD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::STRHHroX: case AArch64::STRHroX:
+      genRtAddr(MI, Ctx, "sto", HALF, DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::STRWroW: case AArch64::STRSroW:
+      genRtAddr(MI, Ctx, "sto", WORD, WORD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    case AArch64::STRWroX: case AArch64::STRSroX:
       genRtAddr(MI, Ctx, "sto", WORD, DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::STRWroX:
-      genRtAddr(MI, Ctx, "sto", WORD, DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+    case AArch64::STRXroW: case AArch64::STRDroW:
+      genRtAddr(MI, Ctx, "sto", DOUB, WORD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
+    case AArch64::STRXroX: case AArch64::STRDroX:
+      genRtAddr(MI, Ctx, "sto", DOUB, DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      break;
+    // Immediate offsets
     case AArch64::STRWui: case AArch64::STRSui:
       genRtAddr(MI, Ctx, "sto", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::STRXui:
+    case AArch64::STRXui: case AArch64::STRDui:
       genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRQui:
@@ -567,17 +644,39 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
     case AArch64::STURWi:
       genRtAddr(MI, Ctx, "sto", WORD, UNUSED, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::STURXi:
+    case AArch64::STURXi: case AArch64::STURDi:
       genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
-    case AArch64::STPXi:
+    case AArch64::STRBBpre: case AArch64::STRBBpost: case AArch64::STRBpre: case AArch64::STRBpost:
+      genRtAddr(MI, Ctx, "sto", BYTE, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/true);
+      break;
+    case AArch64::STRHHpre: case AArch64::STRHHpost: case AArch64::STRHpre: case AArch64::STRHpost:
+      genRtAddr(MI, Ctx, "sto", HALF, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/true);
+      break;
+    case AArch64::STRWpost: case AArch64::STRWpre:
+      genRtAddr(MI, Ctx, "sto", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/true);
+      break;
+    case AArch64::STRXpost: case AArch64::STRXpre:
+      genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/true);
+      break;
+    // Pairs
+    case AArch64::STPWi: case AArch64::STPSi:
+      genRtAddr(MI, Ctx, "sto", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/true, /*isIndexed*/false);
+      break;
+    case AArch64::STPXi: case AArch64::STPDi:
       genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/true, /*isIndexed*/false);
       break;
-    case AArch64::STPXpre: case AArch64::STPXpost:
+    case AArch64::STPXpre: case AArch64::STPXpost: case AArch64::STPDpre: case AArch64::STPDpost:
       genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/true, /*isIndexed*/true);
       break;
     // UNSUPPORTED
     case AArch64::CFI_INSTRUCTION:
+    case AArch64::DBG_VALUE:
+    case AArch64::DBG_VALUE_LIST:
+    case AArch64::IMPLICIT_DEF:
+    case AArch64::JUMP_TABLE_DEBUG_INFO:
+    case AArch64::JumpTableDest16:
+    case AArch64::KILL:
       break;
   }
 }
@@ -631,16 +730,16 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
       BasicBlockTable.push_back({BBSymbolName, CurrentAnnotationOffset});
 
       for (auto &MI : MBB) {
-        unsigned int opcode = MI.getOpcode();
-        StringRef mnemonic = TII->getName(opcode);
-        LLVM_DEBUG(dbgs() << "instr: " << mnemonic << "\n");
+        unsigned int Opcode = MI.getOpcode();
+        StringRef Mnemonic = TII->getName(Opcode);
+        LLVM_DEBUG(dbgs() << "instr: " << Mnemonic << "\n");
         // Main generation function, creates AND STORES the annotation
         generateAnnotation(MI, Ctx);
       }
       // Adding an end instruction in the annotations
-      std::string endAnnotation = "END";
-      StringRef endRef(endAnnotation);
-      storeAnnotation(endRef, Ctx);
+      std::string EndAnnotation = "END";
+      StringRef EndRef(EndAnnotation);
+      storeAnnotation(EndRef, Ctx);
     }
 
     //
