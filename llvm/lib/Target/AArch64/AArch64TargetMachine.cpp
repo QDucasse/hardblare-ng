@@ -270,6 +270,8 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAArch64Target() {
   initializeAArch64DAGToDAGISelLegacyPass(*PR);
   // HBNG: Initialize annotation pass
   initializeAArch64HBNGAnnotatePass(*PR);
+  // HBNG: Initialize STM pass
+  initializeAArch64HBNGSendToSTMPass(*PR);
 }
 
 void AArch64TargetMachine::reset() { SubtargetMap.clear(); }
@@ -899,6 +901,10 @@ void AArch64PassConfig::addPreEmitPass2() {
   // instructions are lowered to bundles as well.
   addPass(createUnpackMachineBundles(nullptr));
   // HBNG: Add the pass at the end of the emission, after all optimizations
+  addPass(createAArch64HBNGAnnotatePass());
+  // HBNG: Once the annotations have been generated for all instructions, add
+  //       store instructions to send base register values down the STM. Placed
+  //       here to avoid generating annotations for them.
   addPass(createAArch64HBNGAnnotatePass());
 }
 

@@ -74,6 +74,8 @@ FunctionPass *createAArch64StackTaggingPass(bool IsOptNone);
 FunctionPass *createAArch64StackTaggingPreRAPass();
 // HBNG: Register annotation pass
 FunctionPass *createAArch64HBNGAnnotatePass();
+// HBNG: Register STM pass
+FunctionPass *createAArch64HBNGSendToSTMPass();
 ModulePass *createAArch64Arm64ECCallLoweringPass();
 
 void initializeAArch64A53Fix835769Pass(PassRegistry&);
@@ -116,6 +118,8 @@ void initializeSVEIntrinsicOptsPass(PassRegistry &);
 void initializeAArch64Arm64ECCallLoweringPass(PassRegistry &);
 // HBNG: Initialize annotation pass
 void initializeAArch64HBNGAnnotatePass(PassRegistry &);
+// HBNG: Initialize STM pass
+void initializeAArch64HBNGSendToSTMPass(PassRegistry &);
 } // end namespace llvm
 
 #endif
