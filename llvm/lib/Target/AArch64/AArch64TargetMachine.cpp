@@ -905,7 +905,7 @@ void AArch64PassConfig::addPreEmitPass2() {
   // HBNG: Once the annotations have been generated for all instructions, add
   //       store instructions to send base register values down the STM. Placed
   //       here to avoid generating annotations for them.
-  addPass(createAArch64HBNGAnnotatePass());
+  addPass(createAArch64HBNGSendToSTMPass());
 }
 
 bool AArch64PassConfig::addRegAssignAndRewriteOptimized() {
