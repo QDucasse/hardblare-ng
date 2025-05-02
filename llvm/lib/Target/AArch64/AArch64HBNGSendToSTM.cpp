@@ -23,6 +23,7 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "hbng-send-stm"
+#define TARGET_REG AArch64::X28
 
 namespace {
 class AArch64HBNGSendToSTM : public MachineFunctionPass {
@@ -56,7 +57,7 @@ INITIALIZE_PASS(AArch64HBNGSendToSTM, DEBUG_TYPE, "HardBlare-NG Send to STM pass
 
 void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, MachineInstr &MI) {
     // Reserved register holding the STM fixed address
-    unsigned TargetReg = AArch64::X15;
+    unsigned TargetReg = TARGET_REG;
 
     unsigned int Opcode = MI.getOpcode();
     StringRef Mnemonic = TII->getName(Opcode);
@@ -93,7 +94,7 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
         case AArch64::STRHHpre: case AArch64::STRHHpost: case AArch64::STRHpre: case AArch64::STRHpost:
         case AArch64::STRWpost: case AArch64::STRWpre:
         case AArch64::STRXpost: case AArch64::STRXpre:
-            // Store the value of the base register into [X15]
+            // Store the value of the base register into [Target Reg]
             BaseRegister = MI.getOperand(1).getReg();
             // The stack pointer cannot be stored directly and sent to the STM
             // Instead, it is expected that it is sent at the start of the tracing
@@ -124,7 +125,7 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
         case AArch64::STRWroX: case AArch64::STRSroX:
         case AArch64::STRXroW: case AArch64::STRDroW:
         case AArch64::STRXroX: case AArch64::STRDroX:
-            // Store the value of the base register and the register offset into [X15]
+            // Store the value of the base register and the register offset into [Target Reg]
             BaseRegister = MI.getOperand(1).getReg();
             OffsetRegister = MI.getOperand(2).getReg();
             // The stack pointer cannot be stored directly and sent to the STM
@@ -149,7 +150,7 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
         case AArch64::STPWi: case AArch64::STPSi:
         case AArch64::STPXi: case AArch64::STPDi:
         case AArch64::STPXpre: case AArch64::STPXpost: case AArch64::STPDpre: case AArch64::STPDpost:
-            // Store the value of the base register and the register offset into [X15]
+            // Store the value of the base register and the register offset into [Target Reg]
             BaseRegister = MI.getOperand(2).getReg();
             // The stack pointer cannot be stored directly and sent to the STM
             // Instead, it is expected that it is sent at the start of the tracing
