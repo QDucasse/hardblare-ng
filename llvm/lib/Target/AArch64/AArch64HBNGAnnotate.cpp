@@ -183,7 +183,8 @@ void AArch64HBNGAnnotate::genZero(MachineInstr &MI, LLVMContext &Ctx) {
   std::string FormatString;
   raw_string_ostream OS(FormatString);
   printStrOperand(MI.getOperand(0), OS);
-  OS << " <- 0";
+  // FIXME: Passing imm(0) might not be enough to mean REPLACE the previous tag with 0
+  OS << " <- Imm(0)";
   StringRef Result2(FormatString);
   LLVM_DEBUG(dbgs() << Result2 << "\n");
   storeAnnotation(Result2, Ctx);
@@ -726,7 +727,6 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
       if (MBB.isEntryBlock()) {
         BBSymbolName = MF.getName();
       } else {
-        // TODO: why is the -1 needed..... a basic block might be removed later on?
         BBSymbolName = ".LBB" + std::to_string(MF.getFunctionNumber()) + "_" + std::to_string(MBB.getNumber());
       }
       // Force basic block labels to be emitted
