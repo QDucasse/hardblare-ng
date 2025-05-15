@@ -437,15 +437,19 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
     // Two registers
     case AArch64::ADDXrr: case AArch64::ADDXrx: case AArch64::ADDXrs:
     case AArch64::ADDWrr: case AArch64::ADDWrx: case AArch64::ADDWrs:
+      genRdTwoOperandsAnnotation(MI, Ctx, "add", /*Carry=*/false, /*Flags=*/false);
+      break;
     case AArch64::SUBXrr: case AArch64::SUBXrx: case AArch64::SUBXrs:
     case AArch64::SUBWrr: case AArch64::SUBWrx: case AArch64::SUBWrs:
-      genRdTwoOperandsAnnotation(MI, Ctx, "ari", /*Carry=*/false, /*Flags=*/false);
+      genRdTwoOperandsAnnotation(MI, Ctx, "sub", /*Carry=*/false, /*Flags=*/false);
       break;
     case AArch64::ADDSXrr: case AArch64::ADDSXrx: case AArch64::ADDSXrs:
     case AArch64::ADDSWrr: case AArch64::ADDSWrx: case AArch64::ADDSWrs:
+      genRdTwoOperandsAnnotation(MI, Ctx, "add", /*Carry=*/false, /*Flags=*/true);
+      break;
     case AArch64::SUBSXrr: case AArch64::SUBSXrx: case AArch64::SUBSXrs:
     case AArch64::SUBSWrr: case AArch64::SUBSWrx: case AArch64::SUBSWrs:
-      genRdTwoOperandsAnnotation(MI, Ctx, "ari", /*Carry=*/false, /*Flags=*/true);
+      genRdTwoOperandsAnnotation(MI, Ctx, "sub", /*Carry=*/false, /*Flags=*/true);
       break;
     case AArch64::ADCSXr: case AArch64::ADCSWr:
     case AArch64::SBCSXr: case AArch64::SBCSWr:
@@ -457,8 +461,10 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
       break;
     // Register/Immediate
     case AArch64::ADDXri: case AArch64::ADDWri:
+      genRdTwoOperandsAnnotation(MI, Ctx, "add", /*Carry=*/true, /*Flags=*/true);
+      break;
     case AArch64::SUBXri: case AArch64::SUBWri:
-      genRdTwoOperandsAnnotation(MI, Ctx, "ari", /*Carry=*/false, /*Flags=*/false);
+      genRdTwoOperandsAnnotation(MI, Ctx, "sub", /*Carry=*/false, /*Flags=*/false);
       break;
     case AArch64::ADDSXri: case AArch64::ADDSWri:
     case AArch64::SUBSXri: case AArch64::SUBSWri:
@@ -530,28 +536,28 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
     // TODO: Other addressing modes
     // Register offsets
     case AArch64::LDRBBroW: case AArch64::LDRBroW:
-      genRtAddr(MI, Ctx, "loa", BYTE, WORD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "loa", BYTE, WORD, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRBBroX: case AArch64::LDRBroX:
-      genRtAddr(MI, Ctx, "loa", BYTE, DOUB, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "loa", BYTE, DOUB, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRHHroW: case AArch64::LDRHroW:
-      genRtAddr(MI, Ctx, "loa", HALF, WORD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "loa", HALF, WORD, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
       case AArch64::LDRHHroX: case AArch64::LDRHroX:
-      genRtAddr(MI, Ctx, "loa", HALF, DOUB, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "loa", HALF, DOUB, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRWroW:  case AArch64::LDRSWroW: case AArch64::LDRSroW:
-      genRtAddr(MI, Ctx, "loa", WORD, WORD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "loa", WORD, WORD, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRWroX: case AArch64::LDRSWroX: case AArch64::LDRSroX:
-      genRtAddr(MI, Ctx, "loa", WORD, DOUB, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "loa", WORD, DOUB, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRXroW: case AArch64::LDRDroW:
-      genRtAddr(MI, Ctx, "sto", DOUB, WORD, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", DOUB, WORD, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRXroX: case AArch64::LDRDroX:
-      genRtAddr(MI, Ctx, "loa", DOUB, DOUB, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "loa", DOUB, DOUB, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     // Immediate offsets
     case AArch64::LDRBBui: case AArch64::LDRBui:
@@ -577,16 +583,16 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
       genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRBBpre: case AArch64::LDRBBpost: case AArch64::LDRBpre: case AArch64::LDRBpost:
-      genRtAddr(MI, Ctx, "loa", BYTE, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      genRtAddr(MI, Ctx, "loa", BYTE, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
       break;
     case AArch64::LDRHHpre: case AArch64::LDRHHpost: case AArch64::LDRHpre: case AArch64::LDRHpost:
-      genRtAddr(MI, Ctx, "loa", HALF, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      genRtAddr(MI, Ctx, "loa", HALF, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
       break;
     case AArch64::LDRWpre: case AArch64::LDRWpost: case AArch64::LDRSpre: case AArch64::LDRSpost:
-      genRtAddr(MI, Ctx, "loa", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      genRtAddr(MI, Ctx, "loa", WORD, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
       break;
     case AArch64::LDRXpre: case AArch64::LDRXpost: case AArch64::LDRDpre: case AArch64::LDRDpost:
-      genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
       break;
     // Pairs
     case AArch64::LDPWi: case AArch64::LDPSWi: case AArch64::LDPSi:
@@ -608,28 +614,28 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
     // TODO: Other addressing modes
     // Register offsets
     case AArch64::STRBBroW: case AArch64::STRBroW:
-      genRtAddr(MI, Ctx, "sto", BYTE, WORD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", BYTE, WORD, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRBBroX: case AArch64::STRBroX:
-      genRtAddr(MI, Ctx, "sto", BYTE, DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", BYTE, DOUB, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRHHroW: case AArch64::STRHroW:
-      genRtAddr(MI, Ctx, "sto", HALF, WORD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", HALF, WORD, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRHHroX: case AArch64::STRHroX:
-      genRtAddr(MI, Ctx, "sto", HALF, DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", HALF, DOUB, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRWroW: case AArch64::STRSroW:
-      genRtAddr(MI, Ctx, "sto", WORD, WORD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", WORD, WORD, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRWroX: case AArch64::STRSroX:
-      genRtAddr(MI, Ctx, "sto", WORD, DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", WORD, DOUB, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRXroW: case AArch64::STRDroW:
-      genRtAddr(MI, Ctx, "sto", DOUB, WORD, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", DOUB, WORD, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRXroX: case AArch64::STRDroX:
-      genRtAddr(MI, Ctx, "sto", DOUB, DOUB, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", DOUB, DOUB, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     // Immediate offsets
     case AArch64::STRWui: case AArch64::STRSui:
@@ -642,10 +648,10 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
       genRtAddr(MI, Ctx, "sto", QUAD, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STURWi:
-      genRtAddr(MI, Ctx, "sto", WORD, UNUSED, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STURXi: case AArch64::STURDi:
-      genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRBBpre: case AArch64::STRBBpost: case AArch64::STRBpre: case AArch64::STRBpost:
       genRtAddr(MI, Ctx, "sto", BYTE, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/true);
