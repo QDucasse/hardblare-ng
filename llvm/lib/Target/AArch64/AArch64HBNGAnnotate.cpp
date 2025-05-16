@@ -173,7 +173,8 @@ void AArch64HBNGAnnotate::storeAnnotation(StringRef &Annotation, LLVMContext &Ct
   Metadata *OpData[] = { MDString::get(Ctx, Annotation) };
   Annotations.push_back(MDTuple::get(Ctx, OpData)); // Store metadata in vector
   uint64_t AnnotationSize = Annotation.size();
-  CurrentAnnotationOffset += AnnotationSize;
+  CurrentAnnotationOffset += AnnotationSize + 1; // +1 for \n
+  LLVM_DEBUG(dbgs() << "Storing annotation: " << Annotation << " (size " << AnnotationSize + 1 << ")\n");
 }
 
 //===----------------------------------------------------------------------===//
@@ -742,10 +743,16 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
         // Main generation function, creates AND STORES the annotation
         generateAnnotation(MI, Ctx);
       }
-      // Adding an end instruction in the annotations
-      std::string EndAnnotation = "END";
-      StringRef EndRef(EndAnnotation);
-      storeAnnotation(EndRef, Ctx);
+
+      // Emit END annotation only if block ends in a branch
+      if (!MBB.empty()) {
+        const MachineInstr &LastMI = MBB.back();
+        if (LastMI.isBranch() || LastMI.isReturn() || LastMI.isCall()) {
+          std::string EndAnnotation = "END";
+          StringRef EndRef(EndAnnotation);
+          storeAnnotation(EndRef, Ctx);
+        }
+      }
     }
 
     //
