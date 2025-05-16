@@ -585,16 +585,16 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
       genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::LDRBBpre: case AArch64::LDRBBpost: case AArch64::LDRBpre: case AArch64::LDRBpost:
-      genRtAddr(MI, Ctx, "loa", BYTE, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      genRtAddr(MI, Ctx, "loa", BYTE, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
       break;
     case AArch64::LDRHHpre: case AArch64::LDRHHpost: case AArch64::LDRHpre: case AArch64::LDRHpost:
-      genRtAddr(MI, Ctx, "loa", HALF, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      genRtAddr(MI, Ctx, "loa", HALF, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
       break;
     case AArch64::LDRWpre: case AArch64::LDRWpost: case AArch64::LDRSpre: case AArch64::LDRSpost:
-      genRtAddr(MI, Ctx, "loa", WORD, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      genRtAddr(MI, Ctx, "loa", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
       break;
     case AArch64::LDRXpre: case AArch64::LDRXpost: case AArch64::LDRDpre: case AArch64::LDRDpost:
-      genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
+      genRtAddr(MI, Ctx, "loa", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/true);
       break;
     // Pairs
     case AArch64::LDPWi: case AArch64::LDPSWi: case AArch64::LDPSi:
@@ -650,10 +650,10 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
       genRtAddr(MI, Ctx, "sto", QUAD, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STURWi:
-      genRtAddr(MI, Ctx, "sto", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", WORD, UNUSED, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STURXi: case AArch64::STURDi:
-      genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      genRtAddr(MI, Ctx, "sto", DOUB, UNUSED, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     case AArch64::STRBBpre: case AArch64::STRBBpost: case AArch64::STRBpre: case AArch64::STRBpost:
       genRtAddr(MI, Ctx, "sto", BYTE, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/true);
