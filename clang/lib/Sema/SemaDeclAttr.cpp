@@ -6501,6 +6501,18 @@ static void handleVTablePointerAuthentication(Sema &S, Decl *D,
       CustomDiscriminationValue));
 }
 
+// HBNG: handle the hbng_no_instr attribute
+static void handleHBNGNoInstrAttr(Sema &S, Decl *D, const ParsedAttr &Attr) {
+  // If the declaration is not a function declaration, raise a warning
+  if (!isa<FunctionDecl>(D)) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type)
+        << Attr << ExpectedFunction;
+    return;
+  }
+  // Add the attribute
+  D->addAttr(::new (S.Context) HBNGNoInstrAttr(S.Context, Attr));
+}
+
 //===----------------------------------------------------------------------===//
 // Top Level Sema Entry Points
 //===----------------------------------------------------------------------===//
@@ -7409,6 +7421,11 @@ ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D, const ParsedAttr &AL,
 
   case ParsedAttr::AT_VTablePointerAuthentication:
     handleVTablePointerAuthentication(S, D, AL);
+    break;
+
+  // HBNG: Handle hbng_no_instr attribute
+  case ParsedAttr::AT_HBNGNoInstr:
+    handleHBNGNoInstrAttr(S, D, AL);
     break;
   }
 }

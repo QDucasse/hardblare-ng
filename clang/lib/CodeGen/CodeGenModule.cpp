@@ -2626,6 +2626,9 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
       B.addAttribute(llvm::Attribute::MinSize);
   }
 
+  // HBNG - no instrumentation attribute
+  if (D->hasAttr<clang::HBNGNoInstrAttr>()) B.addAttribute("hbng_no_instr");
+
   F->addFnAttrs(B);
 
   unsigned alignment = D->getMaxAlignment() / Context.getCharWidth();
