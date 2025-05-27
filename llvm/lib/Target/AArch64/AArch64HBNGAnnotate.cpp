@@ -45,7 +45,6 @@ class AArch64HBNGAnnotate : public MachineFunctionPass {
     const MachineRegisterInfo *MRI;
     std::vector<MDNode *> Annotations;
     uint64_t CurrentAnnotationOffset;
-    std::vector<std::pair<std::string, uint64_t>> BasicBlockTable;
 
 public:
     static char ID;
@@ -699,12 +698,13 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
     TII = STI.getInstrInfo();
     TRI = MF.getSubtarget().getRegisterInfo();
     MRI = &MF.getRegInfo();
+    // Function Info, the basic block table is stored here
+    AArch64FunctionInfo *FI = MF.getInfo<AArch64FunctionInfo>();
     // Get the context and module
     Module *M = MF.getFunction().getParent();
     LLVMContext &Ctx = MF.getFunction().getContext();
 
-    // Reset the basic block table and annotations for the current machine function
-    BasicBlockTable = {};
+    // Reset the annotations for the current machine function
     Annotations = {};
 
     // Attach collected data as module metadata, avoids polluting global symbols
@@ -716,25 +716,16 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
     LLVM_DEBUG(dbgs() << "func: " << MF.getName() << "\n");
     for (auto &MBB : MF) {
       LLVM_DEBUG(dbgs() << "bblock: " << MBB.getName() << "\n");
-      // Basic block symbol
-      // TODO: I am here reverse-engineering the temporary label used in the final binary,
-      //       This might not be the best option but since the basic block label itself
-      //       is not generated yet (MBB.getSymbol() gets an empty string for now).
-      //       Note that if the basic block is the first one in the function, its label
-      //       will not be generated, even with setLabelMustBeEmitted, (see
-      //       shouldEmitLabelForBasicBlock in AsmPrinter.cpp) as it can fall back to the
-      //       function name label directly.
-      std::string BBSymbolName;
-      if (MBB.isEntryBlock()) {
-        BBSymbolName = MF.getName();
-      } else {
-        BBSymbolName = ".LBB" + std::to_string(MF.getFunctionNumber()) + "_" + std::to_string(MBB.getNumber());
-      }
-      // Force basic block labels to be emitted
-      MBB.setLabelMustBeEmitted();
+      // Get the symbol of the basic block
+      Twine SymbolName = MBB.isEntryBlock()
+        ? "HBNG_" + Twine(MF.getFunction().getName())
+        : "HBNG_" + Twine(MF.getFunction().getName()) + "_" + Twine(MBB.getNumber());
+      MCSymbol *BBSym = MF.getContext().getOrCreateSymbol(SymbolName);
+
+      LLVM_DEBUG(dbgs() << "ri block name: " << BBSym->getName() << "\n");
 
       // Adds the basic block symbol and start offset of the annotations in the table
-      BasicBlockTable.push_back({BBSymbolName, CurrentAnnotationOffset});
+      FI->BasicBlockTable.push_back({BBSym, CurrentAnnotationOffset});
 
       for (auto &MI : MBB) {
         unsigned int Opcode = MI.getOpcode();
@@ -758,16 +749,6 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
     //
     for (auto &Annotation : Annotations) {
       AnnotMD->addOperand(Annotation);
-    }
-
-    for (const auto &Entry : BasicBlockTable) {
-        // Create a tuple with the basic block symbol and the corresponding annotation offset
-        std::vector<Metadata *> MetadataList;
-        MetadataList.push_back(MDString::get(Ctx, Entry.first)); // Basic block symbol (converted to string)
-        MetadataList.push_back(ConstantAsMetadata::get(ConstantInt::get(Ctx, APInt(64, Entry.second)))); // Annotation offset (64-bit integer)
-
-        // Add the tuple to the BBT metadata
-        BBTMD->addOperand(MDTuple::get(Ctx, MetadataList));
     }
 
     // Notify if the content has changed

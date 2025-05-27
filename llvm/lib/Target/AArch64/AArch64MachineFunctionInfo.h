@@ -561,6 +561,9 @@ public:
 
   int64_t getStackProbeSize() const { return StackProbeSize; }
 
+    // HBNG - basic block table
+  std::vector<std::pair<llvm::MCSymbol*, uint64_t>> BasicBlockTable;
+
 private:
   // Hold the lists of LOHs.
   MILOHContainer LOHContainerSet;

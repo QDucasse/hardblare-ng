@@ -87,6 +87,10 @@ class AArch64AsmPrinter : public AsmPrinter {
   FaultMaps FM;
   const AArch64Subtarget *STI;
   bool ShouldEmitWeakSwiftAsyncExtendedFramePointerFlags = false;
+
+  // HBNG: running index for BBT and BBT
+  int BBTIndex;
+  std::vector<std::pair<MCSymbol*, uint64_t>> HBNGBasicBlockTable;
 #ifndef NDEBUG
   unsigned InstsEmitted;
 #endif
@@ -269,6 +273,12 @@ private:
 
   void emitFunctionBodyEnd() override;
   void emitGlobalAlias(const Module &M, const GlobalAlias &GA) override;
+
+  // HBNG emission to dedicated sections
+  void emitHBNGAnnotationSection(Module &M);
+  void emitHBNGBasicBlockTableSection();
+  void emitFunctionBodyStart() override;
+  void emitBasicBlockStart(const MachineBasicBlock &MBB) override;
 
   MCSymbol *GetCPISymbol(unsigned CPID) const override;
   void emitEndOfAsmFile(Module &M) override;
@@ -1037,6 +1047,11 @@ void AArch64AsmPrinter::emitEndOfAsmFile(Module &M) {
       }
     }
   }
+
+  // HBNG: Emit the annotation section
+  emitHBNGAnnotationSection(M);
+  // HBNG: Emit the basic block table section
+  emitHBNGBasicBlockTableSection();
 }
 
 void AArch64AsmPrinter::emitLOHs() {
@@ -1057,7 +1072,62 @@ void AArch64AsmPrinter::emitLOHs() {
 void AArch64AsmPrinter::emitFunctionBodyEnd() {
   if (!AArch64FI->getLOHRelated().empty())
     emitLOHs();
+
+    // HBNG: Add basic block table to the global one
+    const auto *FI = MF->getInfo<AArch64FunctionInfo>();
+    HBNGBasicBlockTable.insert(
+      HBNGBasicBlockTable.end(),
+      FI->BasicBlockTable.begin(),
+      FI->BasicBlockTable.end()
+    );
+
 }
+
+// FIXME: Move to a subclass
+
+void AArch64AsmPrinter::emitHBNGAnnotationSection(Module &M) {
+  // HBNG: Switch to the .hbngannot section
+  OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGAnnotationSection());
+  NamedMDNode *AnnotMD = M.getNamedMetadata("hbng_annotation_info");
+  if (AnnotMD) {
+    for (const auto *Tuple : AnnotMD->operands()) {
+      const auto *Annotation = dyn_cast<MDString>(Tuple->getOperand(0));
+
+      if (Annotation) {
+        OutStreamer->emitBytes(Annotation->getString().str() + "\n");
+      }
+    }
+  }
+}
+
+void AArch64AsmPrinter::emitHBNGBasicBlockTableSection() {
+  // HBNG: Switch to the .hbngbbt section
+  OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGBasicBlockTableSection());
+  for (auto &Entry : HBNGBasicBlockTable) {
+    MCSymbol *Sym = Entry.first;
+    uint64_t Offset = Entry.second;
+    LLVM_DEBUG(dbgs() << "Symbol: " << Sym->getName() << " is defined: " << Sym->isDefined() << "\n");
+    OutStreamer->emitValue(MCSymbolRefExpr::create(Sym, OutContext), 8);
+    OutStreamer->emitInt64(Offset);
+  }
+}
+
+
+void AArch64AsmPrinter::emitFunctionBodyStart() {
+  // HBNG: Add a BBT index, reset on function start
+  BBTIndex = 0;
+  AsmPrinter::emitFunctionBodyStart();
+}
+
+void AArch64AsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
+  // HBNG: Get the corresponding custom label and emit it, update the bbtindex
+  MCSymbol *BBSym = MF->getInfo<AArch64FunctionInfo>()->BasicBlockTable[BBTIndex].first;
+  OutStreamer->emitLabel(BBSym);
+  AsmPrinter::emitBasicBlockStart(MBB);
+  ++BBTIndex;
+}
+
+
 
 /// GetCPISymbol - Return the symbol for the specified constant pool entry.
 MCSymbol *AArch64AsmPrinter::GetCPISymbol(unsigned CPID) const {

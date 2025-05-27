@@ -2685,49 +2685,6 @@ bool AsmPrinter::doFinalization(Module &M) {
     }
   }
 
-
-    // HBNG: Switch to the .hbngannot section
-    OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGAnnotationSection());
-    NamedMDNode *AnnotMD = M.getNamedMetadata("hbng_annotation_info");
-    if (AnnotMD) {
-      for (const auto *Tuple : AnnotMD->operands()) {
-        const auto *Annotation = dyn_cast<MDString>(Tuple->getOperand(0));
-
-        if (Annotation) {
-          OutStreamer->emitBytes(Annotation->getString().str() + "\n");
-        }
-      }
-    }
-
-
-  // // HBNG: Switch to the .hbngbbt section
-  OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGBasicBlockTableSection());
-  NamedMDNode *BBTMD = M.getNamedMetadata("hbng_basic_block_table");
-  if (BBTMD) {
-    for (const auto *Tuple : BBTMD->operands()) {
-      const auto *MetadataTuple = dyn_cast<MDTuple>(Tuple);
-      // Extract the MDString (basic block symbol) and the ConstantInt (annotation offset)
-      if (MetadataTuple && MetadataTuple->getNumOperands() == 2) {
-        const auto *BBSymbolMD = dyn_cast<MDString>(MetadataTuple->getOperand(0));
-        const auto *AnnotationOffset = dyn_cast<ConstantAsMetadata>(MetadataTuple->getOperand(1));
-
-        if (BBSymbolMD && AnnotationOffset) {
-          // Get the MCSymbol for this basic block
-          MCSymbol *BBSymbol = OutContext.getOrCreateSymbol(BBSymbolMD->getString());
-          // Emit an 8-byte (64-bit) address reference to the symbol
-          OutStreamer->emitSymbolValue(BBSymbol, 8);
-          LLVM_DEBUG(dbgs() << "Emitting basic block address for: " << BBSymbol->getName() << "\n");
-          // Extract the annotation offset and emit it (as a 64-bit integer)
-          const auto *ConstInt = dyn_cast<ConstantInt>(AnnotationOffset->getValue());
-          if (ConstInt) {
-            uint64_t Offset = ConstInt->getValue().getZExtValue();
-            OutStreamer->emitInt64(Offset); // Emit the 64-bit annotation offset
-          }
-        }
-      }
-    }
-  }
-
   // Allow the target to emit any magic that it wants at the end of the file,
   // after everything else has gone out.
   emitEndOfAsmFile(M);
