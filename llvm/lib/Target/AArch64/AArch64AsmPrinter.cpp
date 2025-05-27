@@ -1087,9 +1087,10 @@ void AArch64AsmPrinter::emitFunctionBodyEnd() {
 
 void AArch64AsmPrinter::emitHBNGAnnotationSection(Module &M) {
   // HBNG: Switch to the .hbngannot section
-  OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGAnnotationSection());
   NamedMDNode *AnnotMD = M.getNamedMetadata("hbng_annotation_info");
   if (AnnotMD) {
+    if (AnnotMD->operands().empty()) return;
+    OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGAnnotationSection());
     for (const auto *Tuple : AnnotMD->operands()) {
       const auto *Annotation = dyn_cast<MDString>(Tuple->getOperand(0));
 
@@ -1102,13 +1103,15 @@ void AArch64AsmPrinter::emitHBNGAnnotationSection(Module &M) {
 
 void AArch64AsmPrinter::emitHBNGBasicBlockTableSection() {
   // HBNG: Switch to the .hbngbbt section
-  OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGBasicBlockTableSection());
-  for (auto &Entry : HBNGBasicBlockTable) {
-    MCSymbol *Sym = Entry.first;
-    uint64_t Offset = Entry.second;
-    LLVM_DEBUG(dbgs() << "Symbol: " << Sym->getName() << " is defined: " << Sym->isDefined() << "\n");
-    OutStreamer->emitValue(MCSymbolRefExpr::create(Sym, OutContext), 8);
-    OutStreamer->emitInt64(Offset);
+  if (!HBNGBasicBlockTable.empty()) {
+    OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGBasicBlockTableSection());
+    for (auto &Entry : HBNGBasicBlockTable) {
+      MCSymbol *Sym = Entry.first;
+      uint64_t Offset = Entry.second;
+      LLVM_DEBUG(dbgs() << "Symbol: " << Sym->getName() << " is defined: " << Sym->isDefined() << "\n");
+      OutStreamer->emitValue(MCSymbolRefExpr::create(Sym, OutContext), 8);
+      OutStreamer->emitInt64(Offset);
+    }
   }
 }
 
@@ -1121,10 +1124,13 @@ void AArch64AsmPrinter::emitFunctionBodyStart() {
 
 void AArch64AsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   // HBNG: Get the corresponding custom label and emit it, update the bbtindex
-  MCSymbol *BBSym = MF->getInfo<AArch64FunctionInfo>()->BasicBlockTable[BBTIndex].first;
-  OutStreamer->emitLabel(BBSym);
-  AsmPrinter::emitBasicBlockStart(MBB);
-  ++BBTIndex;
+  std::vector<std::pair<MCSymbol*, uint64_t>> BBT = MF->getInfo<AArch64FunctionInfo>()->BasicBlockTable;
+  if (!BBT.empty()) {
+    MCSymbol *BBSym = BBT[BBTIndex].first;
+    OutStreamer->emitLabel(BBSym);
+    AsmPrinter::emitBasicBlockStart(MBB);
+    ++BBTIndex;
+  }
 }
 
 
