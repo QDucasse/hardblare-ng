@@ -192,6 +192,15 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
 
 bool AArch64HBNGSendToSTM::runOnMachineFunction(MachineFunction &MF) {
     LLVM_DEBUG(dbgs() << "***** HBNG Send To STM *****\n");
+
+    // Early bailout if the function has attribute hbng_no_instr
+    const Function &F = MF.getFunction();
+    if (F.hasFnAttribute("hbng_no_instr")) {
+      LLVM_DEBUG(dbgs() << "Skipping instrumentation for " << F.getName() << "\n");
+      return false;
+    }
+
+
     // Initialize subtarget information as attributes
     auto &STI = MF.getSubtarget<AArch64Subtarget>();
     TII = STI.getInstrInfo();

@@ -693,6 +693,17 @@ void AArch64HBNGAnnotate::generateAnnotation(MachineInstr &MI, LLVMContext &Ctx)
 
 bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
     LLVM_DEBUG(dbgs() << "***** HBNG Annotations *****\n");
+
+    // TODO: Would be nice but activating it breaks the generation of temporary symbols
+    // const Function &F = MF.getFunction();
+    // if (F.hasFnAttribute("hbng_no_instr")) {
+    //   // FIXME: temporary labels are not emitted I dont know why
+    //   for (auto &MBB : MF) MBB.setLabelMustBeEmitted();
+    //   LLVM_DEBUG(dbgs() << "Skipping instrumentation for " << F.getName() << "\n");
+    //   return false;
+    // }
+
+
     // Initialize subtarget information as attributes
     auto &STI = MF.getSubtarget<AArch64Subtarget>();
     TII = STI.getInstrInfo();
@@ -708,10 +719,8 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
     Annotations = {};
 
     // Attach collected data as module metadata, avoids polluting global symbols
-    // and will be extracted at the emission stage and added to the binary. We create
-    // Two dedicated structures, one for the annotations, the other for the BBT.
+    // and will be extracted at the emission stage and added to the binary.
     NamedMDNode *AnnotMD = M->getOrInsertNamedMetadata("hbng_annotation_info");
-    NamedMDNode *BBTMD = M->getOrInsertNamedMetadata("hbng_basic_block_table");
 
     LLVM_DEBUG(dbgs() << "func: " << MF.getName() << "\n");
     for (auto &MBB : MF) {
