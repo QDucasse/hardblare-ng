@@ -23,11 +23,12 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "hbng-send-stm"
-#define TARGET_REG AArch64::X28
+#define TARGET_REG AArch64::X26
 
 namespace {
 class AArch64HBNGSendToSTM : public MachineFunctionPass {
     const AArch64InstrInfo *TII;
+    const TargetRegisterInfo *TRI;
 public:
     static char ID;
     AArch64HBNGSendToSTM() : MachineFunctionPass(ID) {
@@ -64,6 +65,9 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
 
     unsigned BaseRegister;
     unsigned OffsetRegister;
+
+    const TargetRegisterClass *RC1;
+    const TargetRegisterClass *RC2;
 
     LLVM_DEBUG(dbgs() << "Setting STM send for instruction: " << Mnemonic << "\n");
 
@@ -132,12 +136,30 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
             // Instead, it is expected that it is sent at the start of the tracing
             // process.
             if (BaseRegister == AArch64::SP) break;
-            // STP BaseReg, OffsetReg [TargetReg]
-            BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(AArch64::STPXi))
-                .addReg(BaseRegister)
-                .addReg(OffsetRegister)
-                .addReg(TargetReg)
-                .addImm(0);
+
+            // FIXME: If the offset and base register are not of the same size, STP is not a valid
+            // instruction. For now, emit two store instructions (would be nice to upscale the
+            // smallest register).
+            RC1 = TRI->getMinimalPhysRegClass(BaseRegister);
+            RC2 = TRI->getMinimalPhysRegClass(OffsetRegister);
+            if (RC1 != RC2) {
+                BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(AArch64::STRXui))
+                    .addReg(BaseRegister)
+                    .addReg(TargetReg)
+                    .addImm(0);
+                BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(AArch64::STRXui))
+                    .addReg(OffsetRegister)
+                    .addReg(TargetReg)
+                    .addImm(0);
+            }
+            else {
+                // STP BaseReg, OffsetReg [TargetReg]
+                BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(AArch64::STPXi))
+                    .addReg(BaseRegister)
+                    .addReg(OffsetRegister)
+                    .addReg(TargetReg)
+                    .addImm(0);
+            }
             break;
 
         // Base register, pair load (maybe shifted/extended)
@@ -173,6 +195,7 @@ bool AArch64HBNGSendToSTM::runOnMachineFunction(MachineFunction &MF) {
     // Initialize subtarget information as attributes
     auto &STI = MF.getSubtarget<AArch64Subtarget>();
     TII = STI.getInstrInfo();
+    TRI = MF.getSubtarget().getRegisterInfo();
 
     bool Changed = false;
 

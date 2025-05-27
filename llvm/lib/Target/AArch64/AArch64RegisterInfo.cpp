@@ -543,8 +543,8 @@ AArch64RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   // which becomes considerably expensive when considering the _HI registers.
   Reserved |= getStrictlyReservedRegs(MF);
 
-  // HBNG: Reserving X27 to store the STM stimulus address.
-  Reserved.set(AArch64::X28);
+  // HBNG: Reserving X26 to store the STM stimulus address.
+  Reserved.set(AArch64::X26);
 
   return Reserved;
 }
