@@ -90,7 +90,7 @@ class AArch64AsmPrinter : public AsmPrinter {
 
   // HBNG: running index for BBT and BBT
   int BBTIndex;
-  std::vector<std::pair<MCSymbol*, uint64_t>> HBNGBasicBlockTable;
+  std::vector<HBNGAnnotationInfo> HBNGAnnotationInfos;
 #ifndef NDEBUG
   unsigned InstsEmitted;
 #endif
@@ -1075,10 +1075,10 @@ void AArch64AsmPrinter::emitFunctionBodyEnd() {
 
     // HBNG: Add basic block table to the global one
     const auto *FI = MF->getInfo<AArch64FunctionInfo>();
-    HBNGBasicBlockTable.insert(
-      HBNGBasicBlockTable.end(),
-      FI->BasicBlockTable.begin(),
-      FI->BasicBlockTable.end()
+    HBNGAnnotationInfos.insert(
+      HBNGAnnotationInfos.end(),
+      FI->BBAnnotationInfos.begin(),
+      FI->BBAnnotationInfos.end()
     );
 
 }
@@ -1087,15 +1087,12 @@ void AArch64AsmPrinter::emitFunctionBodyEnd() {
 
 void AArch64AsmPrinter::emitHBNGAnnotationSection(Module &M) {
   // HBNG: Switch to the .hbngannot section
-  NamedMDNode *AnnotMD = M.getNamedMetadata("hbng_annotation_info");
-  if (AnnotMD) {
-    if (AnnotMD->operands().empty()) return;
+  if (!HBNGAnnotationInfos.empty()) {
     OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGAnnotationSection());
-    for (const auto *Tuple : AnnotMD->operands()) {
-      const auto *Annotation = dyn_cast<MDString>(Tuple->getOperand(0));
-
-      if (Annotation) {
-        OutStreamer->emitBytes(Annotation->getString().str() + "\n");
+    for (auto &AnnotationInfo : HBNGAnnotationInfos) {
+      OutStreamer->emitLabel(AnnotationInfo.BBAnnotSymbol);
+      for (std::string Annotation : AnnotationInfo.Annotations) {
+        OutStreamer->emitBytes(Annotation);
       }
     }
   }
@@ -1103,14 +1100,15 @@ void AArch64AsmPrinter::emitHBNGAnnotationSection(Module &M) {
 
 void AArch64AsmPrinter::emitHBNGBasicBlockTableSection() {
   // HBNG: Switch to the .hbngbbt section
-  if (!HBNGBasicBlockTable.empty()) {
+  if (!HBNGAnnotationInfos.empty()) {
     OutStreamer->switchSection(OutContext.getObjectFileInfo()->getHBNGBasicBlockTableSection());
-    for (auto &Entry : HBNGBasicBlockTable) {
-      MCSymbol *Sym = Entry.first;
-      uint64_t Offset = Entry.second;
+     for (auto &AnnotationInfo : HBNGAnnotationInfos) {
+      MCSymbol *Sym = AnnotationInfo.BBSymbol;
+      MCSymbol *AnnotSym = AnnotationInfo.BBAnnotSymbol;
       LLVM_DEBUG(dbgs() << "Symbol: " << Sym->getName() << " is defined: " << Sym->isDefined() << "\n");
+      LLVM_DEBUG(dbgs() << "Annotation Symbol: " << AnnotSym->getName() << " is defined: " << AnnotSym->isDefined() << "\n");
       OutStreamer->emitValue(MCSymbolRefExpr::create(Sym, OutContext), 8);
-      OutStreamer->emitInt64(Offset);
+      OutStreamer->emitValue(MCSymbolRefExpr::create(AnnotSym, OutContext), 8);
     }
   }
 }
@@ -1124,9 +1122,9 @@ void AArch64AsmPrinter::emitFunctionBodyStart() {
 
 void AArch64AsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   // HBNG: Get the corresponding custom label and emit it, update the bbtindex
-  std::vector<std::pair<MCSymbol*, uint64_t>> BBT = MF->getInfo<AArch64FunctionInfo>()->BasicBlockTable;
-  if (!BBT.empty()) {
-    MCSymbol *BBSym = BBT[BBTIndex].first;
+  std::vector<HBNGAnnotationInfo> BBAnnotInfos = MF->getInfo<AArch64FunctionInfo>()->BBAnnotationInfos;
+  if (!BBAnnotInfos.empty()) {
+    MCSymbol *BBSym = BBAnnotInfos[BBTIndex].BBSymbol;
     OutStreamer->emitLabel(BBSym);
     AsmPrinter::emitBasicBlockStart(MBB);
     ++BBTIndex;
