@@ -1072,15 +1072,6 @@ void AArch64AsmPrinter::emitLOHs() {
 void AArch64AsmPrinter::emitFunctionBodyEnd() {
   if (!AArch64FI->getLOHRelated().empty())
     emitLOHs();
-
-    // HBNG: Add basic block table to the global one
-    const auto *FI = MF->getInfo<AArch64FunctionInfo>();
-    HBNGAnnotationInfos.insert(
-      HBNGAnnotationInfos.end(),
-      FI->BBAnnotationInfos.begin(),
-      FI->BBAnnotationInfos.end()
-    );
-
 }
 
 // FIXME: Move to a subclass
@@ -1118,6 +1109,14 @@ void AArch64AsmPrinter::emitFunctionBodyStart() {
   // HBNG: Add a BBT index, reset on function start
   BBTIndex = 0;
   AsmPrinter::emitFunctionBodyStart();
+
+    // HBNG: Add basic block table to the global one
+  const auto *FI = MF->getInfo<AArch64FunctionInfo>();
+  HBNGAnnotationInfos.insert(
+    HBNGAnnotationInfos.end(),
+    FI->BBAnnotationInfos.begin(),
+    FI->BBAnnotationInfos.end()
+  );
 }
 
 void AArch64AsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
@@ -2715,6 +2714,7 @@ void AArch64AsmPrinter::emitInstruction(const MachineInstr *MI) {
     assert(!AArch64InstrInfo::isTailCallReturnInst(*MI) &&
            "Unhandled tail call instruction");
     break;
+
   case AArch64::HINT: {
     // CurrentPatchableFunctionEntrySym can be CurrentFnBegin only for
     // -fpatchable-function-entry=N,0. The entry MBB is guaranteed to be
@@ -3227,6 +3227,15 @@ void AArch64AsmPrinter::emitInstruction(const MachineInstr *MI) {
     TS->emitARM64WinCFISaveAnyRegQPX(MI->getOperand(0).getImm(),
                                      -MI->getOperand(2).getImm());
     return;
+
+  // HBNG: Emit a corresponding label when reaching a pseudo instruction
+  case AArch64::HBNG_ATOM_LABEL: {
+    LLVM_DEBUG(dbgs() << "Trying to access HBNGAnnotinfo table at index " << BBTIndex << "\n");
+      MCSymbol *Sym = HBNGAnnotationInfos[BBTIndex].BBSymbol;
+      OutStreamer->emitLabel(Sym);
+      ++BBTIndex;
+      return;
+    }
 
   case AArch64::BLR:
   case AArch64::BR:

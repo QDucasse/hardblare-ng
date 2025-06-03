@@ -717,7 +717,11 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
       BBAnnotationInfo.BBAnnotSymbol = BBAnnotSym;
       BBAnnotationInfo.Annotations = {};
 
-      for (auto &MI : MBB) {
+
+      unsigned SplitIndex = 0;
+
+      for (auto MIIt = MBB.begin(), End = MBB.end(); MIIt != End; ++MIIt) {
+        MachineInstr &MI = *MIIt;
         unsigned int Opcode = MI.getOpcode();
         StringRef Mnemonic = TII->getName(Opcode);
         LLVM_DEBUG(dbgs() << "instr: " << Mnemonic << "\n");
@@ -728,6 +732,31 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
           InstrAnnotations.begin(),
           InstrAnnotations.end()
         );
+
+        // Check if the current instruction is a branch/return/call etc. but the
+        // basic block does not end on it. If this is the case, we have to emit
+        // a symbol and push it to the bbt to comply to the CoreSight way of defining
+        // Atoms.
+        bool IsLastInstr = std::next(MIIt) == End;
+        bool IsCtrlFlow = MI.isBranch() || MI.isReturn() || MI.isCall();
+        if (IsCtrlFlow && !IsLastInstr) {
+          BBAnnotationInfo.Annotations.push_back("END\n");
+          FI->BBAnnotationInfos.push_back(BBAnnotationInfo);
+
+          // Insert the pseudo instruction in the MBB
+          BuildMI(MBB, std::next(MIIt), DebugLoc(), TII->get(AArch64::HBNG_ATOM_LABEL));
+
+          // Create the new symbols, splitting the basic block and annotations
+          Twine SplitBaseName = SymbolName + "_split_" + Twine(SplitIndex++);
+          MCSymbol *SplitBBSym = MF.getContext().getOrCreateSymbol(SplitBaseName);
+          MCSymbol *SplitAnnotSym = MF.getContext().getOrCreateSymbol(SplitBaseName + "_annot");
+          // Reset the BBAnnotation
+          BBAnnotationInfo.BBSymbol = SplitBBSym;
+          BBAnnotationInfo.BBAnnotSymbol = SplitAnnotSym;
+          BBAnnotationInfo.Annotations = {};
+
+          LLVM_DEBUG(dbgs() << "Splitting the block, resetting info with: " << SplitBBSym->getName() << " and " << SplitAnnotSym->getName() << "\n");
+        }
       }
 
       // Emit END annotation only if block ends in a branch

@@ -10597,6 +10597,14 @@ let Predicates = [HasLSFE] in {
 let Uses = [FPMR, FPCR] in
 defm FMMLA : SIMDThreeSameVectorFP8MatrixMul<"fmmla">;
 
+//===-----------------------------------------------------===//
+// HBNG Label info
+//===-----------------------------------------------------===//
+
+let isPseudo = 1, hasSideEffects = 0 in
+def HBNG_ATOM_LABEL : Pseudo<(outs), (ins), []>, Sched<[]>;
+
+
 include "AArch64InstrAtomics.td"
 include "AArch64SVEInstrInfo.td"
 include "AArch64SMEInstrInfo.td"
