@@ -574,6 +574,7 @@ public:
 
     // HBNG - Annotation information storage
   std::vector<HBNGAnnotationInfo> BBAnnotationInfos;
+  mutable unsigned BBTIndex = 0;
 
 private:
   // Hold the lists of LOHs.

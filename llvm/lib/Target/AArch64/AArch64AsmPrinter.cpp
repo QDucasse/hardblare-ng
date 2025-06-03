@@ -88,8 +88,8 @@ class AArch64AsmPrinter : public AsmPrinter {
   const AArch64Subtarget *STI;
   bool ShouldEmitWeakSwiftAsyncExtendedFramePointerFlags = false;
 
-  // HBNG: running index for BBT and BBT
-  int BBTIndex;
+  // HBNG - BBT and annotations main storage, used by at section emission and
+  // obtained by combining per-function tables
   std::vector<HBNGAnnotationInfo> HBNGAnnotationInfos;
 #ifndef NDEBUG
   unsigned InstsEmitted;
@@ -1106,27 +1106,28 @@ void AArch64AsmPrinter::emitHBNGBasicBlockTableSection() {
 
 
 void AArch64AsmPrinter::emitFunctionBodyStart() {
-  // HBNG: Add a BBT index, reset on function start
-  BBTIndex = 0;
   AsmPrinter::emitFunctionBodyStart();
 
-    // HBNG: Add basic block table to the global one
+  // HBNG: Add basic block table to the global one
   const auto *FI = MF->getInfo<AArch64FunctionInfo>();
-  HBNGAnnotationInfos.insert(
-    HBNGAnnotationInfos.end(),
-    FI->BBAnnotationInfos.begin(),
-    FI->BBAnnotationInfos.end()
-  );
+  if (!FI->BBAnnotationInfos.empty()){
+    HBNGAnnotationInfos.insert(
+      HBNGAnnotationInfos.end(),
+      FI->BBAnnotationInfos.begin(),
+      FI->BBAnnotationInfos.end()
+    );
+  }
 }
 
 void AArch64AsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   // HBNG: Get the corresponding custom label and emit it, update the bbtindex
-  std::vector<HBNGAnnotationInfo> BBAnnotInfos = MF->getInfo<AArch64FunctionInfo>()->BBAnnotationInfos;
+  auto *FI =  MF->getInfo<AArch64FunctionInfo>();
+  std::vector<HBNGAnnotationInfo> BBAnnotInfos = FI->BBAnnotationInfos;
   if (!BBAnnotInfos.empty()) {
-    MCSymbol *BBSym = BBAnnotInfos[BBTIndex].BBSymbol;
+    MCSymbol *BBSym = BBAnnotInfos[FI->BBTIndex].BBSymbol;
+    ++FI->BBTIndex;
     OutStreamer->emitLabel(BBSym);
     AsmPrinter::emitBasicBlockStart(MBB);
-    ++BBTIndex;
   }
 }
 
@@ -3230,10 +3231,10 @@ void AArch64AsmPrinter::emitInstruction(const MachineInstr *MI) {
 
   // HBNG: Emit a corresponding label when reaching a pseudo instruction
   case AArch64::HBNG_ATOM_LABEL: {
-    LLVM_DEBUG(dbgs() << "Trying to access HBNGAnnotinfo table at index " << BBTIndex << "\n");
-      MCSymbol *Sym = HBNGAnnotationInfos[BBTIndex].BBSymbol;
+      const auto *FI = MF->getInfo<AArch64FunctionInfo>();
+      MCSymbol *Sym = FI->BBAnnotationInfos[FI->BBTIndex].BBSymbol;
       OutStreamer->emitLabel(Sym);
-      ++BBTIndex;
+      ++FI->BBTIndex;
       return;
     }
 
