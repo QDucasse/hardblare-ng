@@ -194,7 +194,7 @@ std::vector<std::string> AArch64HBNGAnnotate::genRdTwoOperandsAnnotation(Machine
   }
   // Make a reference to the string and store it in the annotation
   LLVM_DEBUG(dbgs() << Result << "\n");
-  Annotations.push_back(Result);
+  Annotations.push_back(Result + "\n");
 
   if (Flags) {
     std::string Result2;
@@ -207,7 +207,7 @@ std::vector<std::string> AArch64HBNGAnnotate::genRdTwoOperandsAnnotation(Machine
       OS2 << " " << Op << " C";
     }
     LLVM_DEBUG(dbgs() << Result2 << "\n");
-    Annotations.push_back(Result2);
+    Annotations.push_back(Result2 + "\n");
   }
 
   return Annotations;
@@ -227,7 +227,7 @@ std::vector<std::string> AArch64HBNGAnnotate::genRdImmAnnotation(MachineInstr &M
   printStrOperand(MI.getOperand(1), OS);
 
   LLVM_DEBUG(dbgs() << Result << "\n");
-  return {Result};
+  return {Result + "\n"};
 }
 
 std::vector<std::string> AArch64HBNGAnnotate::genRdPCAnnotation(MachineInstr &MI, StringRef Op, bool Page) {
@@ -263,7 +263,7 @@ std::vector<std::string> AArch64HBNGAnnotate::genPCOffsetCondAnnotation(MachineI
     OSLR << "LR <- PC " << Op << " LR " << Op << " ";
     printStrOperand(MI.getOperand(OffsetIndex), OSLR);
     LLVM_DEBUG(dbgs() << ResultLR << "\n");
-    Annotations.push_back(ResultLR);
+    Annotations.push_back(ResultLR + "\n");
   }
 
   // Use a raw_string_ostream to format the string.
@@ -288,7 +288,7 @@ std::vector<std::string> AArch64HBNGAnnotate::genPCOffsetCondAnnotation(MachineI
 #endif
 
   LLVM_DEBUG(dbgs() << ResultPC << "\n");
-  Annotations.push_back(ResultPC);
+  Annotations.push_back(ResultPC + "\n");
   return Annotations;
 }
 
@@ -382,7 +382,7 @@ std::vector<std::string> AArch64HBNGAnnotate::genRtAddr(
     OSaddr << " + " << ASize;
 
     LLVM_DEBUG(dbgs() << Result << "\n");
-    Annotations.push_back(Result);
+    Annotations.push_back(Result + "\n");
   }
 
   if (IsIndexed) {
@@ -395,7 +395,7 @@ std::vector<std::string> AArch64HBNGAnnotate::genRtAddr(
     printStrOperand(MI.getOperand(OffsetIndex), OSIdx);
 
     LLVM_DEBUG(dbgs() << ResultIndex << "\n");
-    Annotations.push_back(ResultIndex);
+    Annotations.push_back(ResultIndex + "\n");
   }
 
   return Annotations;
@@ -417,7 +417,7 @@ std::vector<std::string> AArch64HBNGAnnotate::generateAnnotation(MachineInstr &M
 
   switch (MI.getOpcode()) {
     default:
-        Annotations.push_back(Unsupported);
+        Annotations.push_back(Unsupported + "\n");
         LLVM_DEBUG(dbgs() << Unsupported << "\n");
         break;
     //=== ARITHMETIC ===//
