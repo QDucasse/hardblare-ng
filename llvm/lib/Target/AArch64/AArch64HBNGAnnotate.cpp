@@ -183,7 +183,9 @@ std::vector<std::string> AArch64HBNGAnnotate::genZero(MachineInstr &MI) {
   printStrOperand(MI.getOperand(0), OS);
   // FIXME: Passing imm(0) might not be enough to mean REPLACE the previous tag with 0
   OS << " <- Imm(0)";
-  return {Result};
+
+  LLVM_DEBUG(dbgs() << Result << "\n");
+  return {Result + "\n"};
 }
 
 std::vector<std::string> AArch64HBNGAnnotate::genRdTwoOperandsAnnotation(MachineInstr &MI, StringRef Op, bool Carry, bool Flags) {
@@ -203,7 +205,7 @@ std::vector<std::string> AArch64HBNGAnnotate::genRdTwoOperandsAnnotation(Machine
   if (Carry) {
     OS << " " << Op << " C";
   }
-  // Make a reference to the string and store it in the annotation
+
   LLVM_DEBUG(dbgs() << Result << "\n");
   Annotations.push_back(Result + "\n");
 
@@ -260,7 +262,7 @@ std::vector<std::string> AArch64HBNGAnnotate::genRdPCAnnotation(MachineInstr &MI
 #endif
 
   LLVM_DEBUG(dbgs() << Result << "\n");
-  return {Result};
+  return {Result + "\n"};
 }
 
 std::vector<std::string> AArch64HBNGAnnotate::genPCOffsetCondAnnotation(MachineInstr &MI, StringRef Op, bool Cond, bool Link) {
@@ -573,6 +575,10 @@ std::vector<std::string> AArch64HBNGAnnotate::generateAnnotation(MachineInstr &M
     case AArch64::LDRQui:
       Annotations = genRtAddr(MI, "loa", QUAD, UNUSED, /*isScaled=*/true, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
       break;
+    // Unscaled
+    case AArch64::LDURBBi:
+      Annotations = genRtAddr(MI, "loa", BYTE, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
+      break;
     // TODO: Difference between ldurswi and ldursi?
     case AArch64::LDURWi: case AArch64::LDURSWi: case AArch64::LDURSi:
       Annotations = genRtAddr(MI, "loa", WORD, UNUSED, /*isScaled=*/false, /*isStore=*/false, /*isPair=*/false, /*isIndexed*/false);
@@ -636,6 +642,9 @@ std::vector<std::string> AArch64HBNGAnnotate::generateAnnotation(MachineInstr &M
       Annotations = genRtAddr(MI, "sto", DOUB, DOUB, /*isScaled=*/false, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
     // Immediate offsets
+    case AArch64::STRBBui:
+      Annotations = genRtAddr(MI, "sto", BYTE, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
+      break;
     case AArch64::STRWui: case AArch64::STRSui:
       Annotations = genRtAddr(MI, "sto", WORD, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/false, /*isIndexed*/false);
       break;
@@ -670,10 +679,15 @@ std::vector<std::string> AArch64HBNGAnnotate::generateAnnotation(MachineInstr &M
     case AArch64::STPXi: case AArch64::STPDi:
       Annotations = genRtAddr(MI, "sto", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/true, /*isIndexed*/false);
       break;
+    case AArch64::STPQi:
+      Annotations = genRtAddr(MI, "sto", QUAD, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/true, /*isIndexed*/false);
+      break;
     case AArch64::STPXpre: case AArch64::STPXpost: case AArch64::STPDpre: case AArch64::STPDpost:
       Annotations = genRtAddr(MI, "sto", DOUB, UNUSED, /*isScaled=*/true, /*isStore=*/true, /*isPair=*/true, /*isIndexed*/true);
       break;
-    // UNSUPPORTED
+
+    // Ignore
+    case AArch64::INLINEASM:
     case AArch64::CFI_INSTRUCTION:
     case AArch64::DBG_VALUE:
     case AArch64::DBG_VALUE_LIST:
@@ -681,6 +695,7 @@ std::vector<std::string> AArch64HBNGAnnotate::generateAnnotation(MachineInstr &M
     case AArch64::JUMP_TABLE_DEBUG_INFO:
     case AArch64::JumpTableDest16:
     case AArch64::KILL:
+    case AArch64::HBNG_ATOM_LABEL:
       break;
   }
   return Annotations;
