@@ -144,6 +144,17 @@ static void getMemExtendOperator(MachineInstr &MI, Size OSize, AArch64_AM::Shift
   }
 }
 
+static bool containsSVC(MachineInstr &MI) {
+  bool IsSVC = false;
+  if (MI.isInlineAsm()) {
+    StringRef AsmStr = MI.getOperand(0).getSymbolName();
+    if (AsmStr.contains("svc")) {
+      IsSVC = true;
+    }
+  }
+  return IsSVC;
+}
+
 void AArch64HBNGAnnotate::printCondition(AArch64CC::CondCode CC, StringRef Op, raw_string_ostream &OS) {
   unsigned CCBitMask = getNZCVFlagsUsed(CC);
   if (CCBitMask & N) OS << " " << Op << " N";
@@ -739,7 +750,7 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
         // Atoms.
         bool IsLastInstr = std::next(MIIt) == End;
         bool IsCtrlFlow = MI.isBranch() || MI.isReturn() || MI.isCall();
-        if (IsCtrlFlow && !IsLastInstr) {
+        if ((IsCtrlFlow || containsSVC(MI)) && !IsLastInstr) {
           BBAnnotationInfo.Annotations.push_back("END\n");
           FI->BBAnnotationInfos.push_back(BBAnnotationInfo);
 
@@ -761,8 +772,8 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
 
       // Emit END annotation only if block ends in a branch
       if (!MBB.empty()) {
-        const MachineInstr &LastMI = MBB.back();
-        if (LastMI.isBranch() || LastMI.isReturn() || LastMI.isCall()) {
+        MachineInstr &LastMI = MBB.back();
+        if (LastMI.isBranch() || LastMI.isReturn() || LastMI.isCall() || containsSVC(LastMI)) {
           std::string EndAnnotation = "END\n";
           BBAnnotationInfo.Annotations.push_back(EndAnnotation);
         }
