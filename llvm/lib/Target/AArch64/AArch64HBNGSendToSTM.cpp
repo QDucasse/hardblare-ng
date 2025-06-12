@@ -56,6 +56,74 @@ char AArch64HBNGSendToSTM::ID = 0;
 // Pass initialization
 INITIALIZE_PASS(AArch64HBNGSendToSTM, DEBUG_TYPE, "HardBlare-NG Send to STM pass", false, false)
 
+
+//===----------------------------------------------------------------------===//
+// Helpers
+
+static inline bool isPreOrPostIndexed(unsigned Opcode) {
+    switch (Opcode) {
+        // Loads
+        case AArch64::LDRBBpre: case AArch64::LDRBBpost: case AArch64::LDRBpre: case AArch64::LDRBpost:
+        case AArch64::LDRHHpre: case AArch64::LDRHHpost: case AArch64::LDRHpre: case AArch64::LDRHpost:
+        case AArch64::LDRWpre: case AArch64::LDRWpost: case AArch64::LDRSpre: case AArch64::LDRSpost:
+        case AArch64::LDRXpre: case AArch64::LDRXpost: case AArch64::LDRDpre: case AArch64::LDRDpost:
+        // Stores
+        case AArch64::STRBBpre: case AArch64::STRBBpost: case AArch64::STRBpre: case AArch64::STRBpost:
+        case AArch64::STRHHpre: case AArch64::STRHHpost: case AArch64::STRHpre: case AArch64::STRHpost:
+        case AArch64::STRWpost: case AArch64::STRWpre: case AArch64::STRSpost: case AArch64::STRSpre:
+        case AArch64::STRXpost: case AArch64::STRXpre: case AArch64::STRDpost: case AArch64::STRDpre:
+        case AArch64::STRQpost: case AArch64::STRQpre:
+        // Pairs
+        case AArch64::LDPWpre: case AArch64::LDPWpost: case AArch64::LDPDpre: case AArch64::LDPDpost:
+        case AArch64::LDPXpre: case AArch64::LDPXpost: case AArch64::LDPSpre: case AArch64::LDPSpost:
+        case AArch64::LDPQpre: case AArch64::LDPQpost:
+
+        case AArch64::STPXpre: case AArch64::STPXpost: case AArch64::STPDpre: case AArch64::STPDpost:
+        case AArch64::STPWpre: case AArch64::STPWpost: case AArch64::STPSpre: case AArch64::STPSpost:
+        case AArch64::STPQpre: case AArch64::STPQpost:
+
+            return true;
+        default:
+            return false;
+    }
+}
+
+
+// TODO:
+// case AArch64::STLURXi:
+// case AArch64::STLURWi:
+// case AArch64::STLURHi:
+// case AArch64::STLURBi:
+
+// case AArch64::LDAPURXi:
+// case AArch64::LDAPURi:
+// case AArch64::LDAPURSWi:
+// case AArch64::LDAPURHi:
+// case AArch64::LDAPURSHWi:
+// case AArch64::LDAPURSHXi:
+// case AArch64::LDAPURBi:
+// case AArch64::LDAPURSBWi:
+// case AArch64::LDAPURSBXi:
+
+// case AArch64::LDNPQi:
+// case AArch64::LDNPXi:
+// case AArch64::LDNPDi:
+// case AArch64::LDNPWi:
+// case AArch64::LDNPSi:
+
+// case AArch64::STNPQi:
+// case AArch64::STNPXi:
+// case AArch64::STNPDi:
+// case AArch64::STNPWi:
+// case AArch64::STNPSi:
+
+
+
+
+
+//===----------------------------------------------------------------------===//
+// Main insertion function
+
 void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, MachineInstr &MI) {
     // Reserved register holding the STM fixed address
     unsigned TargetReg = TARGET_REG;
@@ -65,6 +133,7 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
 
     unsigned BaseRegister;
     unsigned OffsetRegister;
+    unsigned int BaseRegisterIndex;
 
     const TargetRegisterClass *RC1;
     const TargetRegisterClass *RC2;
@@ -78,28 +147,45 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
 
         // Base register, immediate offset (maybe post/pre)
         // STR/LDR X1 [X2]     -> Send X2      (STR)
-        case AArch64::LDRBBui: case AArch64::LDRBui:
-        case AArch64::LDRHHui: case AArch64::LDRHui:
-        case AArch64::LDRWui: case AArch64::LDRSWui: case AArch64::LDRSui:
+        // Scaled
+        case AArch64::LDRBBui: case AArch64::LDRBui: case AArch64::LDRSBXui:
+        case AArch64::LDRHHui: case AArch64::LDRHui: case AArch64::LDRSHWui: case AArch64::LDRSHXui:
+        case AArch64::LDRWui: case AArch64::LDRSWui: case AArch64::LDRSui: case AArch64::LDRSBWui:
         case AArch64::LDRXui: case AArch64::LDRDui:
         case AArch64::LDRQui:
+        // Unscaled
+        case AArch64::LDURQi:
+        case AArch64::LDURXi: case AArch64::LDURDi: case AArch64::LDURSHXi:
         case AArch64::LDURWi: case AArch64::LDURSWi: case AArch64::LDURSi:
-        case AArch64::LDURXi: case AArch64::LDURDi:
+        case AArch64::LDURHi: case AArch64::LDURHHi: case AArch64::LDURSHWi:
+        case AArch64::LDURBi: case AArch64::LDURBBi: case AArch64::LDURSBWi: case AArch64::LDURSBXi:
+        // Pre/post index
         case AArch64::LDRBBpre: case AArch64::LDRBBpost: case AArch64::LDRBpre: case AArch64::LDRBpost:
         case AArch64::LDRHHpre: case AArch64::LDRHHpost: case AArch64::LDRHpre: case AArch64::LDRHpost:
         case AArch64::LDRWpre: case AArch64::LDRWpost: case AArch64::LDRSpre: case AArch64::LDRSpost:
         case AArch64::LDRXpre: case AArch64::LDRXpost: case AArch64::LDRDpre: case AArch64::LDRDpost:
+        case AArch64::LDRQpre: case AArch64::LDRQpost:
+        // Scaled
+        case AArch64::STRBui: case AArch64::STRBBui: case AArch64::STURBBi:
+        case AArch64::STRHui: case AArch64::STRHHui:
         case AArch64::STRWui: case AArch64::STRSui:
         case AArch64::STRXui: case AArch64::STRDui:
         case AArch64::STRQui:
-        case AArch64::STURWi:
+        // Unscaled
+        case AArch64::STURBi:
+        case AArch64::STURHi: case AArch64::STURHHi:
+        case AArch64::STURWi: case AArch64::STURSi:
         case AArch64::STURXi: case AArch64::STURDi:
+        case AArch64::STURQi:
+        // Pre/post index
         case AArch64::STRBBpre: case AArch64::STRBBpost: case AArch64::STRBpre: case AArch64::STRBpost:
         case AArch64::STRHHpre: case AArch64::STRHHpost: case AArch64::STRHpre: case AArch64::STRHpost:
-        case AArch64::STRWpost: case AArch64::STRWpre:
-        case AArch64::STRXpost: case AArch64::STRXpre:
+        case AArch64::STRWpost: case AArch64::STRWpre: case AArch64::STRSpost: case AArch64::STRSpre:
+        case AArch64::STRXpost: case AArch64::STRXpre: case AArch64::STRDpost: case AArch64::STRDpre:
+        case AArch64::STRQpost: case AArch64::STRQpre:
             // Store the value of the base register into [Target Reg]
-            BaseRegister = MI.getOperand(1).getReg();
+            BaseRegisterIndex = isPreOrPostIndexed(Opcode) ? 2 : 1;
+            BaseRegister = MI.getOperand(BaseRegisterIndex).getReg();
             // The stack pointer cannot be stored directly and sent to the STM
             // Instead, it is expected that it is sent at the start of the tracing
             // process.
@@ -113,6 +199,7 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
 
         // Base register, register offset (maybe shifted/extended)
         // STR/LDR X1 [X2, X3] -> Send X2, X3  (STP)
+        // loads
         case AArch64::LDRBBroW: case AArch64::LDRBroW:
         case AArch64::LDRBBroX: case AArch64::LDRBroX:
         case AArch64::LDRHHroW: case AArch64::LDRHroW:
@@ -121,6 +208,10 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
         case AArch64::LDRWroX: case AArch64::LDRSWroX: case AArch64::LDRSroX:
         case AArch64::LDRXroW: case AArch64::LDRDroW:
         case AArch64::LDRXroX: case AArch64::LDRDroX:
+        case AArch64::LDRSHXroX: case AArch64::LDRSHXroW: case AArch64::LDRSHWroX: case AArch64::LDRSHWroW:
+        case AArch64::LDRSBXroX: case AArch64::LDRSBXroW: case AArch64::LDRSBWroX: case AArch64::LDRSBWroW:
+        case AArch64::LDRQroX: case AArch64::LDRQroW:
+        // Stores
         case AArch64::STRBBroW: case AArch64::STRBroW:
         case AArch64::STRBBroX: case AArch64::STRBroX:
         case AArch64::STRHHroW: case AArch64::STRHroW:
@@ -129,6 +220,7 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
         case AArch64::STRWroX: case AArch64::STRSroX:
         case AArch64::STRXroW: case AArch64::STRDroW:
         case AArch64::STRXroX: case AArch64::STRDroX:
+        case AArch64::STRQroX: case AArch64::STRQroW:
             // Store the value of the base register and the register offset into [Target Reg]
             BaseRegister = MI.getOperand(1).getReg();
             OffsetRegister = MI.getOperand(2).getReg();
@@ -153,10 +245,11 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
                     .addImm(0);
             }
             else {
-                // STP BaseReg, OffsetReg [TargetReg]
+                // STP OffsetReg, BaseReg,  [TargetReg]
+                // /!\ WARNING they need to be reversed to appear in the STM as 1. base reg 2. offset reg
                 BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(AArch64::STPXi))
-                    .addReg(BaseRegister)
                     .addReg(OffsetRegister)
+                    .addReg(BaseRegister)
                     .addReg(TargetReg)
                     .addImm(0);
             }
@@ -167,13 +260,18 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
         case AArch64::LDPWi: case AArch64::LDPSWi: case AArch64::LDPSi:
         case AArch64::LDPXi: case AArch64::LDPDi:
         case AArch64::LDPQi:
-        case AArch64::LDPWpre: case AArch64::LDPWpost: case AArch64::LDPDpost:
-        case AArch64::LDPXpre: case AArch64::LDPXpost:
         case AArch64::STPWi: case AArch64::STPSi:
         case AArch64::STPXi: case AArch64::STPDi:
+        case AArch64::STPQi:
+        case AArch64::LDPWpre: case AArch64::LDPWpost: case AArch64::LDPSpre: case AArch64::LDPSpost:
+        case AArch64::LDPXpre: case AArch64::LDPXpost: case AArch64::LDPDpre: case AArch64::LDPDpost:
+        case AArch64::LDPQpre: case AArch64::LDPQpost:
+        case AArch64::STPWpre: case AArch64::STPWpost: case AArch64::STPSpre: case AArch64::STPSpost:
         case AArch64::STPXpre: case AArch64::STPXpost: case AArch64::STPDpre: case AArch64::STPDpost:
+        case AArch64::STPQpre: case AArch64::STPQpost:
             // Store the value of the base register and the register offset into [Target Reg]
-            BaseRegister = MI.getOperand(2).getReg();
+            BaseRegisterIndex = isPreOrPostIndexed(Opcode) ? 3 : 2;
+            BaseRegister = MI.getOperand(BaseRegisterIndex).getReg();
             // The stack pointer cannot be stored directly and sent to the STM
             // Instead, it is expected that it is sent at the start of the tracing
             // process.
