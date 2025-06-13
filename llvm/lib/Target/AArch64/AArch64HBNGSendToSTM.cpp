@@ -256,7 +256,7 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
             break;
 
         // Base register, pair load (maybe shifted/extended)
-        // STP/LDP X1, X2 [X3] -> Send X3 two times (STP)
+        // STP/LDP X1, X2 [X3] -> Send X3 two times (STP), needed as two annotations are generated
         case AArch64::LDPWi: case AArch64::LDPSWi: case AArch64::LDPSi:
         case AArch64::LDPXi: case AArch64::LDPDi:
         case AArch64::LDPQi:
