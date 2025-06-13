@@ -256,7 +256,7 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
             break;
 
         // Base register, pair load (maybe shifted/extended)
-        // STP/LDP X1, X2 [X3] -> Send X3      (STR)
+        // STP/LDP X1, X2 [X3] -> Send X3 two times (STP)
         case AArch64::LDPWi: case AArch64::LDPSWi: case AArch64::LDPSi:
         case AArch64::LDPXi: case AArch64::LDPDi:
         case AArch64::LDPQi:
@@ -276,8 +276,8 @@ void AArch64HBNGSendToSTM::insertStoreForAddressOperand(MachineBasicBlock &MBB, 
             // Instead, it is expected that it is sent at the start of the tracing
             // process.
             if (BaseRegister == AArch64::SP) break;
-            // STR BaseReg [TargetReg]
-            BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(AArch64::STRXui))
+            BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(AArch64::STPXi))
+                .addReg(BaseRegister)
                 .addReg(BaseRegister)
                 .addReg(TargetReg)
                 .addImm(0);
