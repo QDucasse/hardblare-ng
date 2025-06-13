@@ -375,7 +375,7 @@ std::vector<std::string> AArch64HBNGAnnotate::genRtAddr(
 
   // Output the annotation in the form:
   // Rt <- [<Rn> + 4*(<Rm> extend amount)] Op Rn Op Rm
-  for (int i = IsPair || IsIndexed ? 1 : 0; i < OffsetIndex - 1; i ++) {
+  for (int i = IsIndexed ? 1 : 0; i < OffsetIndex - 1; i ++) {
 
     std::string Result;
     raw_string_ostream OS(Result);
