@@ -688,6 +688,10 @@ std::vector<std::string> AArch64HBNGAnnotate::generateAnnotation(MachineInstr &M
 
     // Ignore
     case AArch64::INLINEASM:
+      if (containsSVC(MI)) {
+        Annotations.push_back("SVC\n");
+      }
+      break;
     case AArch64::CFI_INSTRUCTION:
     case AArch64::DBG_VALUE:
     case AArch64::DBG_VALUE_LIST:
@@ -731,7 +735,7 @@ bool AArch64HBNGAnnotate::runOnMachineFunction(MachineFunction &MF) {
       // Get the symbol of the basic block
       Twine SymbolName = MBB.isEntryBlock()
         ? "HBNG_" + Twine(MF.getFunction().getName())
-        : "HBNG_" + Twine(MF.getFunction().getName()) + "_" + Twine(MBB.getNumber());
+        : "HBNG_" + Twine(MF.getFunction().getName()) + "_n_" + Twine(MBB.getNumber());
       MCSymbol *BBSym = MF.getContext().getOrCreateSymbol(SymbolName);
       MCSymbol *BBAnnotSym = MF.getContext().getOrCreateSymbol(SymbolName + "_annot");
 
