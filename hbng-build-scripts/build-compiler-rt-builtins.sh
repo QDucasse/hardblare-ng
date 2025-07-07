@@ -2,7 +2,7 @@
 
 cmake -G Ninja \
   -S compiler-rt/lib/builtins \
-  -B ../build-aarch64-compiler-rt-builtins \
+  -B build-aarch64-compiler-rt-builtins \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_SYSTEM_NAME=Linux \
   -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
