@@ -1,0 +1,35 @@
+#!/bin/bash
+
+cmake -G Ninja \
+  -S runtimes \
+  -B build-aarch64-libcxx \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_SYSTEM_NAME=Linux \
+  -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+  -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+  -DCMAKE_SYSROOT=/home/aurora/instr-musl/sysroot \
+  -DCMAKE_C_COMPILER_TARGET=aarch64-linux-musl \
+  -DCMAKE_CXX_COMPILER_TARGET=aarch64-linux-musl \
+  -DCMAKE_C_COMPILER=/home/aurora/qtests/llvm/hardblare-ng/build-aarch64/bin/clang \
+  -DCMAKE_CXX_COMPILER=/home/aurora/qtests/llvm/hardblare-ng/build-aarch64/bin/clang \
+  -DCMAKE_LINKER=/home/aurora/qtests/llvm/hardblare-ng/build-aarch64/bin/ld.lld \
+  -DCMAKE_AR=/home/aurora/qtests/llvm/hardblare-ng/build-aarch64/bin/llvm-ar \
+  -DCMAKE_RANLIB=/home/aurora/qtests/llvm/hardblare-ng/build-aarch64/bin/llvm-ranlib \
+  -DCMAKE_C_FLAGS="--target=aarch64-linux-musl -mcpu=cortex-a53" \
+  -DCMAKE_CXX_FLAGS="--target=aarch64-linux-musl -mcpu=cortex-a53" \
+  -DCMAKE_EXE_LINKER_FLAGS="--target=aarch64-linux-musl -L/home/aurora/qtests/llvm/hardblare-ng/build-aarch64/build-aarch64-compiler-rt-builtins/lib/linux -lclang_rt.builtins-aarch64" \
+  -DLLVM_ENABLE_RUNTIMES="libunwind;libcxxabi;libcxx" \
+  -DLLVM_TARGETS_TO_BUILD="AArch64" \
+  -DLIBCXX_USE_COMPILER_RT=ON \
+  -DLIBCXX_ENABLE_STATIC=ON \
+  -DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=ON \
+  -DLIBCXX_CXX_ABI=libcxxabi \
+  -DLIBCXXABI_USE_COMPILER_RT=ON \
+  -DLIBCXXABI_USE_LLVM_UNWINDER=ON \
+  -DLIBCXXABI_ENABLE_SHARED=OFF \
+  -DLIBUNWIND_ENABLE_STATIC=ON \
+  -DLIBUNWIND_ENABLE_SHARED=OFF \
+  -DLIBUNWIND_USE_COMPILER_RT=TRUE \
+  -DLIBCXX_INCLUDE_TESTS=OFF \
+  -DLIBCXX_ENABLE_ABI_LINKER_SCRIPT=OFF \
+  -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON
